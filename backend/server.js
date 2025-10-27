@@ -120,8 +120,8 @@ app?.use((error, req, res, next) => {
   });
 });
 
-// 404 handler
-app?.use('*', (req, res) => {
+// 404 handler - FIXED: Changed from '*' to '/*' to prevent path-to-regexp error
+app?.use('/*', (req, res) => {
   res?.status(404)?.json({ 
     error: 'Not Found',
     message: 'Endpoint não encontrado' 

@@ -297,6 +297,21 @@ mysqldump -u capifit_user -p capifit_db > backup_$(date +%Y%m%d_%H%M%S).sql
 mysql -u capifit_user -p capifit_db < backup_arquivo.sql
 ```
 
+## ⚠️ Solução de Problemas Comuns
+
+### PathError ao iniciar PM2
+Se ocorrer erro "Missing parameter name at index 1: *", as correções já foram aplicadas no código:
+- Alteração do wildcard `'*'` para `'/*'` no middleware 404
+- Remoção do optional chaining `?.()` para compatibilidade com Node.js em produção
+
+### Dependências Faltando
+Se ocorrerem erros de pacotes não encontrados:
+```bash
+# Verificar se express-rate-limit está instalado corretamente
+cd /var/www/capifit_app/backend
+npm install express-rate-limit@^8.1.0
+```
+
 ## 🔐 Credenciais Padrão
 
 **Administrador:**
