@@ -17,6 +17,9 @@ import CreateMealPlan from './pages/create-meal-plan';
 import PhysicalAssessmentSystem from './pages/physical-assessment-system';
 import ChatCommunicationHub from './pages/chat-communication-hub';
 import WorkoutSessionTracking from './pages/workout-session-tracking';
+import ExerciseLibrary from './pages/exercise-library';
+import ClientProfileManagement from './pages/client-profile-management';
+import NotificationCenter from './pages/notification-center';
 
 const Routes = () => {
   return (
@@ -40,6 +43,9 @@ const Routes = () => {
         <Route path="/create-meal-plan" element={<AuthGuard><CreateMealPlan /></AuthGuard>} />
         <Route path="/physical-assessment-system" element={<AuthGuard><PhysicalAssessmentSystem /></AuthGuard>} />
         <Route path="/chat-communication-hub" element={<AuthGuard><ChatCommunicationHub /></AuthGuard>} />
+        <Route path="/exercise-library" element={<AuthGuard><ExerciseLibrary /></AuthGuard>} />
+        <Route path="/client-profile-management/:clientId?" element={<AuthGuard><ClientProfileManagement /></AuthGuard>} />
+        <Route path="/notification-center" element={<AuthGuard><NotificationCenter /></AuthGuard>} />
         
         {/* Route aliases for broken navigation links */}
         <Route path="/planos-alimentares" element={<AuthGuard><NutritionManagement /></AuthGuard>} />
@@ -47,12 +53,11 @@ const Routes = () => {
         <Route path="/mensagens" element={<AuthGuard><ChatCommunicationHub /></AuthGuard>} />
         <Route path="/relatorios" element={<AuthGuard><DashboardPrincipal /></AuthGuard>} />
         <Route path="/configuracoes" element={<AuthGuard><PerfilDoPersonal /></AuthGuard>} />
+        <Route path="/notificacoes" element={<AuthGuard><NotificationCenter /></AuthGuard>} />
         
         {/* Client-specific routes (missing pages that need to be created) */}
         <Route path="/meu-treino" element={<AuthGuard><WorkoutSessionTracking /></AuthGuard>} />
         <Route path="/progresso" element={<AuthGuard><PhysicalAssessmentSystem /></AuthGuard>} />
-        <Route path="/exercise-library" element={<AuthGuard><CriarTreinos /></AuthGuard>} />
-        <Route path="/client-profile-management/:clientId?" element={<AuthGuard><GerenciarAlunos /></AuthGuard>} />
         
         <Route path="*" element={<NotFound />} />
       </RouterRoutes>
