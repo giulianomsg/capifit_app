@@ -3,6 +3,7 @@
 [![React](https://img.shields.io/badge/React-18.2.0-blue.svg)](https://reactjs.org/)
 [![Vite](https://img.shields.io/badge/Vite-4.x-purple.svg)](https://vitejs.dev/)
 [![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3.x-teal.svg)](https://tailwindcss.com/)
+[![MySQL](https://img.shields.io/badge/MySQL-8.0-orange.svg)](https://mysql.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 Sistema completo e profissional para personal trainers gerenciarem seus clientes, treinos, avaliações físicas e planos nutricionais.
@@ -25,238 +26,183 @@ Sistema completo e profissional para personal trainers gerenciarem seus clientes
 - **Comunicação Direta** - Chat com seu personal trainer
 - **Relatórios de Progresso** - Gráficos e métricas de evolução
 
-## 📋 Pré-requisitos
+## 🛠️ Instalação Completa no Servidor VPS
 
-### Ambiente de Desenvolvimento
-- **Node.js** (v16.x ou superior)
-- **npm** ou **yarn**
+### Pré-requisitos
+- **VPS Ubuntu 20.04+** ou CentOS 7+
+- **Acesso root** ou usuário com sudo
+- **Domínio configurado** (capifit.app.br)
 
-### Ambiente de Produção
-- **VPS/Servidor** Ubuntu 20.04+ ou similar
-- **Nginx** (servidor web)
-- **PM2** (gerenciador de processos Node.js)
-- **Banco de Dados**: MySQL/MariaDB OU PostgreSQL
-- **SSL Certificate** (recomendado)
+---
 
-## 🛠️ Instalação Local (Desenvolvimento)
+## 📋 Passo 1: Preparação do Servidor
 
-### 1. Clone o Repositório
+### 1.1 Atualizar Sistema
 ```bash
-git clone https://github.com/seu-usuario/capifit.git
-cd capifit
+sudo apt update && sudo apt upgrade -y
+sudo apt install curl wget git unzip -y
 ```
 
-### 2. Instale as Dependências
+### 1.2 Instalar Node.js 18.x
 ```bash
-npm install
-# ou
-yarn install
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# Verificar instalação
+node --version  # deve mostrar v18.x.x
+npm --version   # deve mostrar 9.x.x
 ```
 
-### 3. Configure o Banco de Dados Local
-
-#### Opção A: PostgreSQL (Recomendado)
+### 1.3 Instalar PM2 (Gerenciador de Processos)
 ```bash
-# Ubuntu/Debian
-sudo apt update
-sudo apt install postgresql postgresql-contrib
-
-# Iniciar PostgreSQL
-sudo systemctl start postgresql
-sudo systemctl enable postgresql
-
-# Configurar usuário e banco
-sudo -u postgres psql
+sudo npm install -g pm2
 ```
 
-No console do PostgreSQL:
-```sql
-CREATE USER capifit_user WITH ENCRYPTED PASSWORD 'capifit_password';
-CREATE DATABASE capifit_db OWNER capifit_user;
-GRANT ALL PRIVILEGES ON DATABASE capifit_db TO capifit_user;
-\q
+### 1.4 Instalar e Configurar Nginx
+```bash
+sudo apt install nginx -y
+sudo systemctl start nginx
+sudo systemctl enable nginx
+sudo ufw allow 'Nginx Full'
 ```
 
-Executar schema:
+---
+
+## 🗄️ Passo 2: Configurar MySQL
+
+### 2.1 Instalar MySQL Server
 ```bash
-psql -U capifit_user -d capifit_db -f sql/postgresql/01_create_database.sql
-psql -U capifit_user -d capifit_db -f sql/postgresql/02_create_tables.sql
-psql -U capifit_user -d capifit_db -f sql/postgresql/03_sample_data.sql
+sudo apt install mysql-server -y
+sudo systemctl start mysql
+sudo systemctl enable mysql
 ```
 
-#### Opção B: MySQL/MariaDB
+### 2.2 Configuração Inicial de Segurança
 ```bash
-# Ubuntu/Debian
-sudo apt update
-sudo apt install mysql-server
-# ou MariaDB
-sudo apt install mariadb-server
-
-# Configuração inicial
 sudo mysql_secure_installation
 ```
 
-No console do MySQL:
+**Responda as perguntas:**
+- Validate Password Plugin: **Y**
+- Password Level: **2** (Strong)
+- Nova senha root: **Crie uma senha forte**
+- Remove anonymous users: **Y**
+- Disallow root login remotely: **Y**
+- Remove test database: **Y**
+- Reload privilege tables: **Y**
+
+### 2.3 Criar Banco e Usuário
+```bash
+sudo mysql -u root -p
+```
+
+**Execute no console MySQL:**
 ```sql
-CREATE USER 'capifit_user'@'localhost' IDENTIFIED BY 'capifit_password';
 CREATE DATABASE capifit_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'capifit_user'@'localhost' IDENTIFIED BY 'SuaSenhaForteAqui123!';
 GRANT ALL PRIVILEGES ON capifit_db.* TO 'capifit_user'@'localhost';
 FLUSH PRIVILEGES;
 EXIT;
 ```
 
-Executar schema:
+---
+
+## 📥 Passo 3: Deploy da Aplicação
+
+### 3.1 Clonar o Repositório
+```bash
+cd /var/www/
+sudo git clone https://github.com/seu-usuario/capifit.git capifit_app
+sudo chown -R $USER:$USER /var/www/capifit_app
+cd /var/www/capifit_app
+```
+
+### 3.2 Instalar Dependências
+```bash
+npm install
+```
+
+### 3.3 Configurar Variáveis de Ambiente
+```bash
+cp .env.example .env
+nano .env
+```
+
+**Configure o arquivo .env:**
+```env
+# Configuração do MySQL
+VITE_DB_TYPE=mysql
+VITE_DB_HOST=localhost
+VITE_DB_PORT=3306
+VITE_DB_NAME=capifit_db
+VITE_DB_USER=capifit_user
+VITE_DB_PASSWORD=SuaSenhaForteAqui123!
+VITE_API_URL=https://capifit.app.br/api
+
+# JWT Secret (gere uma chave única e segura)
+VITE_JWT_SECRET=gere-uma-chave-jwt-super-secreta-aqui-com-64-caracteres
+
+# Configurações do domínio
+VITE_APP_URL=https://capifit.app.br
+VITE_APP_NAME=CapiFit
+```
+
+### 3.4 Importar Schema do Banco
 ```bash
 mysql -u capifit_user -p capifit_db < sql/mysql/01_create_database.sql
 mysql -u capifit_user -p capifit_db < sql/mysql/02_create_tables.sql
 mysql -u capifit_user -p capifit_db < sql/mysql/03_sample_data.sql
 ```
 
-### 4. Configurar Variáveis de Ambiente
+### 3.5 Build da Aplicação
 ```bash
-cp .env.example .env
-```
-
-Edite o arquivo `.env`:
-```env
-# Configuração do Banco
-VITE_DB_TYPE=postgresql          # ou 'mysql'
-VITE_DB_HOST=localhost
-VITE_DB_PORT=5432               # ou 3306 para MySQL
-VITE_DB_NAME=capifit_db
-VITE_DB_USER=capifit_user
-VITE_DB_PASSWORD=capifit_password
-VITE_API_URL=http://localhost:3001
-
-# JWT Secret (gere um token seguro)
-VITE_JWT_SECRET=seu-jwt-secret-super-seguro-aqui
-
-# Opcionais para funcionalidades extras
-VITE_OPENAI_API_KEY=sua-chave-openai
-VITE_GOOGLE_ANALYTICS_ID=seu-ga-id
-```
-
-### 5. Executar o Servidor de Desenvolvimento
-```bash
-npm run dev
-# ou
-yarn dev
-```
-
-Acesse: `http://localhost:5173`
-
-## 🚀 Instalação em Produção (VPS)
-
-### 1. Preparar o Servidor
-
-#### Atualizar Sistema
-```bash
-sudo apt update && sudo apt upgrade -y
-```
-
-#### Instalar Node.js
-```bash
-# Via NodeSource (recomendado)
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-sudo apt-get install -y nodejs
-
-# Verificar instalação
-node --version
-npm --version
-```
-
-#### Instalar PM2
-```bash
-sudo npm install -g pm2
-```
-
-#### Instalar e Configurar Nginx
-```bash
-sudo apt install nginx -y
-sudo systemctl start nginx
-sudo systemctl enable nginx
-```
-
-### 2. Configurar Banco de Dados em Produção
-
-#### PostgreSQL (Recomendado)
-```bash
-sudo apt install postgresql postgresql-contrib -y
-sudo systemctl start postgresql
-sudo systemctl enable postgresql
-
-# Configurar firewall
-sudo ufw allow 5432/tcp
-
-# Criar usuário e banco
-sudo -u postgres createuser --createdb --pwprompt capifit_user
-sudo -u postgres createdb -O capifit_user capifit_db
-```
-
-#### MySQL/MariaDB
-```bash
-sudo apt install mysql-server -y
-sudo mysql_secure_installation
-
-# Configurar firewall
-sudo ufw allow 3306/tcp
-```
-
-### 3. Fazer Deploy da Aplicação
-
-#### Clone e Build do Frontend
-```bash
-cd /var/www
-sudo git clone https://github.com/seu-usuario/capifit.git
-sudo chown -R $USER:$USER /var/www/capifit
-cd capifit
-
-# Instalar dependências e build
-npm install
 npm run build
 ```
 
-#### Configurar Backend API
-```bash
-# Criar diretório do backend
-mkdir capifit-backend
-cd capifit-backend
+---
 
-# Seguir o guia completo em: backend-setup-guide.md
-# Configurar Node.js + Express + Banco de Dados
-```
+## 🌐 Passo 4: Configurar Nginx para capifit.app.br
 
-#### Configurar PM2 para Backend
-```bash
-# No diretório do backend
-pm2 start server.js --name capifit-api
-pm2 startup
-pm2 save
-```
-
-### 4. Configurar Nginx
-
-Criar configuração do site:
+### 4.1 Criar Configuração do Site
 ```bash
 sudo nano /etc/nginx/sites-available/capifit
 ```
 
-Configuração do Nginx:
+**Adicione a seguinte configuração:**
 ```nginx
-# Frontend (React)
 server {
     listen 80;
-    server_name seu-dominio.com www.seu-dominio.com;
-    
-    root /var/www/capifit/dist;
+    server_name capifit.app.br www.capifit.app.br;
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name capifit.app.br www.capifit.app.br;
+
+    # SSL Certificate (será configurado com Let's Encrypt)
+    ssl_certificate /etc/letsencrypt/live/capifit.app.br/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/capifit.app.br/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    # Diretório dos arquivos estáticos
+    root /var/www/capifit_app/dist;
     index index.html;
-    
-    # Frontend routes
+
+    # Configurações de segurança
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "no-referrer-when-downgrade" always;
+    add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline'" always;
+
+    # Frontend - Aplicação React
     location / {
         try_files $uri $uri/ /index.html;
     }
-    
-    # API routes (proxy para backend)
+
+    # API Backend - Proxy para Node.js
     location /api/ {
         proxy_pass http://localhost:3001;
         proxy_http_version 1.1;
@@ -267,268 +213,389 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_cache_bypass $http_upgrade;
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
     }
-    
-    # Static files caching
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
+
+    # Cache para arquivos estáticos
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
         expires 1y;
         add_header Cache-Control "public, immutable";
+        access_log off;
+    }
+
+    # Bloquear acesso a arquivos sensíveis
+    location ~ /\.(ht|env|git) {
+        deny all;
+    }
+
+    # Logs específicos do site
+    access_log /var/log/nginx/capifit_access.log;
+    error_log /var/log/nginx/capifit_error.log;
+}
+```
+
+### 4.2 Ativar o Site
+```bash
+sudo ln -s /etc/nginx/sites-available/capifit /etc/nginx/sites-enabled/
+sudo rm /etc/nginx/sites-enabled/default
+sudo nginx -t
+```
+
+---
+
+## 🔒 Passo 5: Configurar SSL com Let's Encrypt
+
+### 5.1 Instalar Certbot
+```bash
+sudo snap install core; sudo snap refresh core
+sudo snap install --classic certbot
+sudo ln -s /snap/bin/certbot /usr/bin/certbot
+```
+
+### 5.2 Obter Certificado SSL
+```bash
+# Primeiro, edite temporariamente o Nginx sem SSL
+sudo nano /etc/nginx/sites-available/capifit
+```
+
+**Configure temporariamente sem SSL:**
+```nginx
+server {
+    listen 80;
+    server_name capifit.app.br www.capifit.app.br;
+    
+    root /var/www/capifit_app/dist;
+    index index.html;
+    
+    location / {
+        try_files $uri $uri/ /index.html;
     }
 }
 ```
 
-Ativar o site:
 ```bash
-sudo ln -s /etc/nginx/sites-available/capifit /etc/nginx/sites-enabled/
+sudo systemctl reload nginx
+
+# Obter certificado
+sudo certbot --nginx -d capifit.app.br -d www.capifit.app.br
+
+# Restaurar configuração completa com SSL
+sudo nano /etc/nginx/sites-available/capifit
+```
+
+**Restaure a configuração SSL completa mostrada no Passo 4.1**
+
+```bash
 sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-### 5. Configurar SSL (HTTPS)
-
-#### Instalar Certbot
+### 5.3 Configurar Renovação Automática
 ```bash
-sudo apt install snapd -y
-sudo snap install core; sudo snap refresh core
-sudo snap install --classic certbot
+sudo crontab -e
+
+# Adicione esta linha para renovação automática
+0 3 * * * /usr/bin/certbot renew --quiet
 ```
 
-#### Obter Certificado SSL
+---
+
+## 🚀 Passo 6: Configurar Backend API
+
+### 6.1 Criar Estrutura do Backend
 ```bash
-sudo certbot --nginx -d seu-dominio.com -d www.seu-dominio.com
+mkdir -p /var/www/capifit_app/backend
+cd /var/www/capifit_app/backend
 ```
 
-### 6. Configurar Firewall
+### 6.2 Criar package.json
+```bash
+cat > package.json << 'EOF'
+{
+  "name": "capifit-backend",
+  "version": "1.0.0",
+  "description": "CapiFit Backend API",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "mysql2": "^3.6.0",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "cors": "^2.8.5",
+    "helmet": "^7.0.0",
+    "rate-limit": "^1.0.2",
+    "dotenv": "^16.3.1"
+  }
+}
+EOF
+```
+
+### 6.3 Instalar Dependências do Backend
+```bash
+npm install
+```
+
+### 6.4 Criar Arquivo do Servidor
+```bash
+cat > server.js << 'EOF'
+const express = require('express');
+const mysql = require('mysql2/promise');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+require('dotenv').config();
+
+const app = express();
+const PORT = process.env.PORT || 3001;
+
+// Middlewares de segurança
+app.use(helmet());
+app.use(cors());
+app.use(express.json({ limit: '10mb' }));
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 100 // máximo 100 requests por IP
+});
+app.use(limiter);
+
+// Configuração do MySQL
+const dbConfig = {
+  host: process.env.VITE_DB_HOST || 'localhost',
+  user: process.env.VITE_DB_USER || 'capifit_user',
+  password: process.env.VITE_DB_PASSWORD,
+  database: process.env.VITE_DB_NAME || 'capifit_db',
+  charset: 'utf8mb4'
+};
+
+// Rotas principais
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'OK', message: 'CapiFit API está funcionando!' });
+});
+
+// Middleware de autenticação
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.sendStatus(401);
+  }
+
+  jwt.verify(token, process.env.VITE_JWT_SECRET, (err, user) => {
+    if (err) return res.sendStatus(403);
+    req.user = user;
+    next();
+  });
+};
+
+// Rota de login
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const connection = await mysql.createConnection(dbConfig);
+    
+    const [users] = await connection.execute(
+      'SELECT * FROM users WHERE email = ?',
+      [email]
+    );
+    
+    await connection.end();
+    
+    if (users.length === 0) {
+      return res.status(401).json({ message: 'Credenciais inválidas' });
+    }
+    
+    const user = users[0];
+    const validPassword = await bcrypt.compare(password, user.password_hash);
+    
+    if (!validPassword) {
+      return res.status(401).json({ message: 'Credenciais inválidas' });
+    }
+    
+    const token = jwt.sign(
+      { id: user.id, email: user.email, role: user.role },
+      process.env.VITE_JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+    
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    console.error('Erro no login:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+// Iniciar servidor
+app.listen(PORT, () => {
+  console.log(`CapiFit API rodando na porta ${PORT}`);
+});
+EOF
+```
+
+### 6.5 Criar arquivo .env para o backend
+```bash
+cp /var/www/capifit_app/.env /var/www/capifit_app/backend/.env
+```
+
+### 6.6 Iniciar Backend com PM2
+```bash
+pm2 start server.js --name capifit-api
+pm2 startup
+pm2 save
+```
+
+---
+
+## 🔧 Passo 7: Configurações Finais
+
+### 7.1 Configurar Firewall
 ```bash
 sudo ufw allow OpenSSH
 sudo ufw allow 'Nginx Full'
-sudo ufw allow 5432/tcp  # PostgreSQL
-# ou
 sudo ufw allow 3306/tcp  # MySQL
-sudo ufw enable
+sudo ufw --force enable
 ```
 
-### 7. Configuração de Monitoramento
-
-#### PM2 Monitoring
+### 7.2 Configurar Backup Automático
 ```bash
-# Visualizar logs
-pm2 logs capifit-api
+sudo mkdir -p /var/backups/capifit
+sudo chown $USER:$USER /var/backups/capifit
 
-# Monitorar recursos
-pm2 monit
-
-# Restart automático
-pm2 startup
-```
-
-#### Backup Automático do Banco
-```bash
-# Criar script de backup
-sudo nano /home/backup-capifit.sh
-```
-
-Script de backup:
-```bash
+cat > /home/backup-capifit.sh << 'EOF'
 #!/bin/bash
 DATE=$(date +%Y%m%d_%H%M%S)
 BACKUP_DIR="/var/backups/capifit"
 
-# PostgreSQL
-pg_dump -U capifit_user -h localhost capifit_db > "$BACKUP_DIR/capifit_db_$DATE.sql"
+# Backup do banco de dados
+mysqldump -u capifit_user -p'SuaSenhaForteAqui123!' capifit_db > "$BACKUP_DIR/capifit_db_$DATE.sql"
 
-# MySQL (alternativo)
-# mysqldump -u capifit_user -p capifit_db > "$BACKUP_DIR/capifit_db_$DATE.sql"
+# Backup dos arquivos da aplicação
+tar -czf "$BACKUP_DIR/capifit_files_$DATE.tar.gz" -C /var/www/ capifit_app/
 
 # Manter apenas últimos 7 backups
-find $BACKUP_DIR -type f -name "*.sql" -mtime +7 -delete
-```
+find $BACKUP_DIR -name "*.sql" -mtime +7 -delete
+find $BACKUP_DIR -name "*.tar.gz" -mtime +7 -delete
+EOF
 
-Configurar cron:
-```bash
+chmod +x /home/backup-capifit.sh
+
+# Configurar backup automático diário
 sudo crontab -e
-
-# Backup diário às 2:00
-0 2 * * * /home/backup-capifit.sh
+# Adicione: 0 2 * * * /home/backup-capifit.sh
 ```
 
-## 📱 Estrutura do Projeto
-
-```
-capifit/
-├── public/                     # Arquivos públicos
-├── src/
-│   ├── components/             # Componentes reutilizáveis
-│   │   ├── ui/                # Componentes de interface
-│   │   └── ...
-│   ├── pages/                  # Páginas da aplicação
-│   │   ├── dashboard-principal/
-│   │   ├── gerenciar-alunos/
-│   │   ├── exercise-library/
-│   │   ├── physical-assessment-system/
-│   │   ├── criar-treinos/
-│   │   ├── nutrition-management/
-│   │   ├── chat-communication-hub/
-│   │   └── notification-center/
-│   ├── lib/                    # Utilitários e configurações
-│   │   └── database.js         # Configuração do banco
-│   ├── hooks/                  # Custom hooks React
-│   └── styles/                 # Estilos globais
-├── sql/                        # Schemas de banco de dados
-│   ├── mysql/                  # Scripts MySQL/MariaDB
-│   └── postgresql/             # Scripts PostgreSQL
-├── backend-setup-guide.md      # Guia completo do backend
-└── ...
-```
-
-## 🔧 Scripts Disponíveis
-
+### 7.3 Verificar Status dos Serviços
 ```bash
-npm run dev          # Servidor de desenvolvimento
-npm run build        # Build para produção
-npm run preview      # Preview da build local
-npm run lint         # Executar linting
-```
-
-## 🔐 Autenticação e Segurança
-
-- **JWT Authentication** - Tokens seguros com expiração
-- **Bcrypt Passwords** - Hash seguro de senhas
-- **Role-based Access** - Controle por perfis (trainer/client/admin)
-- **Input Validation** - Sanitização de dados de entrada
-- **SQL Injection Protection** - Queries preparadas
-- **HTTPS Enforced** - Comunicação criptografada
-- **Rate Limiting** - Proteção contra ataques
-
-## 📊 Funcionalidades Técnicas
-
-### Frontend (React)
-- **React 18** com Hooks e Context API
-- **Vite** para build rápida e HMR
-- **TailwindCSS** para styling responsivo
-- **React Router** para navegação SPA
-- **React Hook Form** para formulários eficientes
-- **Recharts/D3.js** para visualizações
-- **Framer Motion** para animações
-
-### Backend Options
-- **Node.js + Express** (Recomendado)
-- **PHP + Laravel** (Alternativo)
-- **Python + FastAPI** (Alternativo)
-
-### Banco de Dados
-- **PostgreSQL** (Recomendado) - Robusto e confiável
-- **MySQL/MariaDB** - Alternativa popular e eficiente
-- **Schemas completos** com dados de exemplo
-- **Relacionamentos otimizados** para performance
-
-## 🚀 Performance e Otimização
-
-- **Lazy Loading** de componentes
-- **Code Splitting** automático
-- **Caching** de assets estáticos
-- **Compressão Gzip/Brotli**
-- **CDN Ready** para assets
-- **Database Indexing** otimizado
-- **API Rate Limiting**
-
-## 📈 Monitoramento e Analytics
-
-- **PM2 Process Monitoring**
-- **Nginx Access Logs**
-- **Database Performance Metrics**
-- **Error Tracking Integration Ready**
-- **Google Analytics Integration**
-
-## 🔄 Updates e Manutenção
-
-### Atualizar Aplicação
-```bash
-# Fazer backup
-pm2 stop capifit-api
-pg_dump capifit_db > backup_$(date +%Y%m%d).sql
-
-# Atualizar código
-git pull origin main
-npm install
-npm run build
-
-# Restart
-pm2 restart capifit-api
-```
-
-### Monitorar Logs
-```bash
-# Backend logs
-pm2 logs capifit-api
-
-# Nginx logs
-sudo tail -f /var/log/nginx/access.log
-sudo tail -f /var/log/nginx/error.log
-
-# Database logs (PostgreSQL)
-sudo tail -f /var/log/postgresql/postgresql-*.log
-```
-
-## 🆘 Troubleshooting
-
-### Problemas Comuns
-
-1. **Erro de conexão com banco**
-   - Verificar se o serviço está rodando
-   - Conferir credenciais no `.env`
-   - Verificar firewall/portas
-
-2. **Frontend não carrega**
-   - Verificar se o build foi feito
-   - Conferir configuração do Nginx
-   - Verificar permissões de arquivos
-
-3. **API não responde**
-   - Verificar se PM2 está rodando
-   - Conferir logs com `pm2 logs`
-   - Verificar porta 3001
-
-### Comandos Úteis
-```bash
-# Status dos serviços
+# Verificar Nginx
 sudo systemctl status nginx
-sudo systemctl status postgresql
+
+# Verificar MySQL
+sudo systemctl status mysql
+
+# Verificar Backend API
 pm2 status
 
-# Verificar portas em uso
-sudo netstat -tlnp | grep :80
-sudo netstat -tlnp | grep :3001
-sudo netstat -tlnp | grep :5432
-
-# Restart completo
-sudo systemctl restart nginx
-sudo systemctl restart postgresql
-pm2 restart all
+# Testar conectividade
+curl -I https://capifit.app.br
+curl https://capifit.app.br/api/health
 ```
-
-## 📝 Licença
-
-Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
-
-## 🤝 Contribuição
-
-1. Faça um Fork do projeto
-2. Crie uma Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
-4. Push para a Branch (`git push origin feature/AmazingFeature`)
-5. Abra um Pull Request
-
-## 📞 Suporte
-
-Para suporte e dúvidas:
-- 📧 Email: suporte@capifit.com
-- 📱 WhatsApp: (11) 99999-9999
-- 📖 Documentação: [docs.capifit.com]
-- 🐛 Issues: [GitHub Issues](https://github.com/seu-usuario/capifit/issues)
 
 ---
 
-**CapiFit** - Transformando o futuro do Personal Training 💪
+## 📊 Monitoramento e Manutenção
 
-Built with ❤️ using React, Node.js e muito café ☕
+### Logs do Sistema
+```bash
+# Logs do Nginx
+sudo tail -f /var/log/nginx/capifit_access.log
+sudo tail -f /var/log/nginx/capifit_error.log
+
+# Logs do Backend
+pm2 logs capifit-api
+
+# Logs do MySQL
+sudo tail -f /var/log/mysql/error.log
+```
+
+### Comandos de Manutenção
+```bash
+# Restart completo
+sudo systemctl restart nginx
+sudo systemctl restart mysql
+pm2 restart capifit-api
+
+# Atualizar aplicação
+cd /var/www/capifit_app
+git pull origin main
+npm install
+npm run build
+pm2 restart capifit-api
+
+# Verificar performance
+pm2 monit
+```
+
+### Troubleshooting Comum
+
+**1. Site não carrega:**
+```bash
+sudo nginx -t
+sudo systemctl status nginx
+curl -I https://capifit.app.br
+```
+
+**2. API não responde:**
+```bash
+pm2 status
+pm2 logs capifit-api
+curl https://capifit.app.br/api/health
+```
+
+**3. Erro de banco de dados:**
+```bash
+sudo systemctl status mysql
+mysql -u capifit_user -p -e "SHOW DATABASES;"
+```
+
+---
+
+## ✅ Verificação Final
+
+Após completar todos os passos, teste:
+
+1. **Acesse https://capifit.app.br** - Deve carregar o frontend
+2. **Teste a API:** `curl https://capifit.app.br/api/health`
+3. **Faça login** no sistema
+4. **Verifique funcionalidades** básicas
+
+---
+
+## 📞 Suporte
+
+Para dúvidas ou problemas:
+- 🐛 **Issues:** [GitHub Issues](https://github.com/seu-usuario/capifit/issues)
+- 📧 **Email:** suporte@capifit.app.br
+- 📱 **WhatsApp:** (11) 99999-9999
+
+---
+
+**CapiFit** - Sistema Profissional de Personal Training
+Desenvolvido com ❤️ usando React, Node.js e MySQL
