@@ -251,7 +251,7 @@ const DashboardPrincipal = () => {
   const userName = userRole === 'trainer' ? 'João Silva' : 'Maria Santos';
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="bg-background">
       {/* Header Section - Updated for CapiFit */}
       <div className="bg-card border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">

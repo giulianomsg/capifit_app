@@ -137,7 +137,7 @@ const GerenciarAlunos = () => {
   );
 
   useEffect(() => {
-    document.title = "Gerenciar Alunos - FitTrainer Pro";
+    document.title = "Gerenciar Alunos - CapiFit";
   }, []);
 
   const handleClientAction = (action, client) => {
@@ -217,7 +217,7 @@ const GerenciarAlunos = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background pt-16">
+    <div className="bg-background">
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-8">

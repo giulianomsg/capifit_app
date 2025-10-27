@@ -42,10 +42,10 @@ const Header = ({ onMenuToggle, isMenuOpen = false }) => {
         <div className="hidden lg:flex items-center">
           <div className="flex items-center space-x-2">
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <Icon name="Dumbbell" size={20} color="white" />
+              <span className="text-white font-bold text-lg">🦫</span>
             </div>
             <span className="text-xl font-semibold text-foreground">
-              FitTrainer Pro
+              CapiFit
             </span>
           </div>
         </div>
@@ -54,10 +54,10 @@ const Header = ({ onMenuToggle, isMenuOpen = false }) => {
         <div className="flex items-center lg:hidden">
           <div className="flex items-center space-x-2">
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <Icon name="Dumbbell" size={20} color="white" />
+              <span className="text-white font-bold text-lg">🦫</span>
             </div>
             <span className="text-lg font-semibold text-foreground">
-              FitTrainer Pro
+              CapiFit
             </span>
           </div>
         </div>
