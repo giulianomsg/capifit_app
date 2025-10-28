@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
 import Input from '../../../components/ui/Input';
@@ -7,69 +7,73 @@ import { Checkbox } from '../../../components/ui/Checkbox';
 import StatusBadge from './StatusBadge';
 import ClientActionMenu from './ClientActionMenu';
 
-const ClientsTable = ({ 
-  clients = [], 
-  onClientSelect = null,
+const ClientsTable = ({
+  clients = [],
   onBulkAction = null,
-  onClientAction = null 
+  onClientAction = null,
+  searchTerm = '',
+  onSearchChange = () => {},
+  filters = { subscription: 'all', paymentStatus: 'all', activityLevel: 'all' },
+  onFiltersChange = () => {},
 }) => {
   const [selectedClients, setSelectedClients] = useState([]);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filters, setFilters] = useState({
-    subscription: 'all',
-    paymentStatus: 'all',
-    activityLevel: 'all'
-  });
 
-  // Filter and search logic
   const filteredClients = useMemo(() => {
-    let filtered = clients?.filter(client => {
-      const matchesSearch = client?.nome?.toLowerCase()?.includes(searchTerm?.toLowerCase()) ||
-                           client?.email?.toLowerCase()?.includes(searchTerm?.toLowerCase());
-      
-      const matchesSubscription = filters?.subscription === 'all' || 
-                                 client?.planoAtivo === filters?.subscription;
-      
-      const matchesPayment = filters?.paymentStatus === 'all' || 
-                            client?.statusPagamento === filters?.paymentStatus;
-      
-      const matchesActivity = filters?.activityLevel === 'all' || 
-                             client?.nivelAtividade === filters?.activityLevel;
-      
-      return matchesSearch && matchesSubscription && matchesPayment && matchesActivity;
-    });
+    let filtered = clients;
 
-    // Apply sorting
+    if (filters.subscription !== 'all') {
+      filtered = filtered.filter((client) => client?.planoAtivo === filters.subscription);
+    }
+
+    if (filters.paymentStatus !== 'all') {
+      filtered = filtered.filter((client) => client?.statusPagamento === filters.paymentStatus);
+    }
+
+    if (filters.activityLevel !== 'all') {
+      filtered = filtered.filter((client) => client?.nivelAtividade === filters.activityLevel);
+    }
+
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter((client) => {
+        return (
+          client?.nome?.toLowerCase().includes(term) ||
+          client?.email?.toLowerCase().includes(term) ||
+          client?.telefone?.toLowerCase().includes(term)
+        );
+      });
+    }
+
     if (sortConfig?.key) {
-      filtered?.sort((a, b) => {
-        let aValue = a?.[sortConfig?.key];
-        let bValue = b?.[sortConfig?.key];
-        
-        if (sortConfig?.key === 'ultimoTreino' || sortConfig?.key === 'proximaAvaliacao') {
-          aValue = new Date(aValue);
-          bValue = new Date(bValue);
+      filtered = [...filtered].sort((a, b) => {
+        let aValue = a?.[sortConfig.key];
+        let bValue = b?.[sortConfig.key];
+
+        if (['ultimoTreino', 'proximaAvaliacao', 'dataInscricao'].includes(sortConfig.key)) {
+          aValue = aValue ? new Date(aValue) : new Date(0);
+          bValue = bValue ? new Date(bValue) : new Date(0);
         }
-        
-        if (aValue < bValue) return sortConfig?.direction === 'asc' ? -1 : 1;
-        if (aValue > bValue) return sortConfig?.direction === 'asc' ? 1 : -1;
+
+        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
         return 0;
       });
     }
 
     return filtered;
-  }, [clients, searchTerm, filters, sortConfig]);
+  }, [clients, filters, searchTerm, sortConfig]);
 
   const handleSort = (key) => {
-    setSortConfig(prev => ({
+    setSortConfig((prev) => ({
       key,
-      direction: prev?.key === key && prev?.direction === 'asc' ? 'desc' : 'asc'
+      direction: prev?.key === key && prev?.direction === 'asc' ? 'desc' : 'asc',
     }));
   };
 
   const handleSelectAll = (checked) => {
     if (checked) {
-      setSelectedClients(filteredClients?.map(client => client?.id));
+      setSelectedClients(filteredClients.map((client) => client?.id));
     } else {
       setSelectedClients([]);
     }
@@ -77,9 +81,9 @@ const ClientsTable = ({
 
   const handleSelectClient = (clientId, checked) => {
     if (checked) {
-      setSelectedClients(prev => [...prev, clientId]);
+      setSelectedClients((prev) => [...prev, clientId]);
     } else {
-      setSelectedClients(prev => prev?.filter(id => id !== clientId));
+      setSelectedClients((prev) => prev.filter((id) => id !== clientId));
     }
   };
 
@@ -92,25 +96,29 @@ const ClientsTable = ({
 
   const getSortIcon = (key) => {
     if (sortConfig?.key !== key) return 'ArrowUpDown';
-    return sortConfig?.direction === 'asc' ? 'ArrowUp' : 'ArrowDown';
+    return sortConfig.direction === 'asc' ? 'ArrowUp' : 'ArrowDown';
   };
 
   const formatDate = (dateString) => {
-    return new Date(dateString)?.toLocaleDateString('pt-BR');
+    if (!dateString) return '—';
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return '—';
+    return date.toLocaleDateString('pt-BR');
   };
 
   const subscriptionOptions = [
     { value: 'all', label: 'Todos os Planos' },
     { value: 'mensal', label: 'Mensal' },
     { value: 'trimestral', label: 'Trimestral' },
-    { value: 'anual', label: 'Anual' }
+    { value: 'anual', label: 'Anual' },
+    { value: 'personalizado', label: 'Personalizado' },
   ];
 
   const paymentStatusOptions = [
     { value: 'all', label: 'Todos os Status' },
     { value: 'em-dia', label: 'Em Dia' },
     { value: 'pendente', label: 'Pendente' },
-    { value: 'atrasado', label: 'Atrasado' }
+    { value: 'atrasado', label: 'Atrasado' },
   ];
 
   const activityLevelOptions = [
@@ -118,56 +126,52 @@ const ClientsTable = ({
     { value: 'alto', label: 'Alto' },
     { value: 'medio', label: 'Médio' },
     { value: 'baixo', label: 'Baixo' },
-    { value: 'inativo', label: 'Inativo' }
+    { value: 'inativo', label: 'Inativo' },
   ];
 
   return (
     <div className="bg-card border border-border rounded-lg overflow-hidden">
-      {/* Search and Filters */}
-      <div className="p-6 border-b border-border bg-muted/30">
-        <div className="flex flex-col lg:flex-row gap-4 mb-4">
-          <div className="flex-1">
-            <Input
-              type="search"
-              placeholder="Buscar por nome ou email..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e?.target?.value)}
-              className="w-full"
-            />
-          </div>
-          
+      <div className="p-6 border-b border-border bg-muted/30 space-y-4">
+        <div className="flex flex-col lg:flex-row gap-4">
+          <Input
+            type="search"
+            placeholder="Buscar por nome, email ou telefone..."
+            value={searchTerm}
+            onChange={(e) => onSearchChange(e?.target?.value)}
+            className="w-full"
+          />
+
           <div className="flex flex-col sm:flex-row gap-3">
             <Select
               options={subscriptionOptions}
-              value={filters?.subscription}
-              onChange={(value) => setFilters(prev => ({ ...prev, subscription: value }))}
+              value={filters.subscription}
+              onChange={(value) => onFiltersChange({ ...filters, subscription: value })}
               placeholder="Filtrar por plano"
               className="w-full sm:w-48"
             />
-            
+
             <Select
               options={paymentStatusOptions}
-              value={filters?.paymentStatus}
-              onChange={(value) => setFilters(prev => ({ ...prev, paymentStatus: value }))}
+              value={filters.paymentStatus}
+              onChange={(value) => onFiltersChange({ ...filters, paymentStatus: value })}
               placeholder="Status pagamento"
               className="w-full sm:w-48"
             />
-            
+
             <Select
               options={activityLevelOptions}
-              value={filters?.activityLevel}
-              onChange={(value) => setFilters(prev => ({ ...prev, activityLevel: value }))}
+              value={filters.activityLevel}
+              onChange={(value) => onFiltersChange({ ...filters, activityLevel: value })}
               placeholder="Nível atividade"
               className="w-full sm:w-48"
             />
           </div>
         </div>
 
-        {/* Bulk Actions */}
-        {selectedClients?.length > 0 && (
+        {selectedClients.length > 0 && (
           <div className="flex items-center gap-3 p-3 bg-primary/10 rounded-lg">
             <span className="text-sm font-medium text-foreground">
-              {selectedClients?.length} cliente(s) selecionado(s)
+              {selectedClients.length} cliente(s) selecionado(s)
             </span>
             <div className="flex gap-2">
               <Button
@@ -202,32 +206,25 @@ const ClientsTable = ({
         )}
 
         <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span>{filteredClients?.length} cliente(s) encontrado(s)</span>
+          <span>{filteredClients.length} cliente(s) encontrado(s)</span>
           {searchTerm && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setSearchTerm('')}
-              iconName="X"
-              iconPosition="left"
-            >
+            <Button variant="ghost" size="sm" onClick={() => onSearchChange('')} iconName="X" iconPosition="left">
               Limpar busca
             </Button>
           )}
         </div>
       </div>
-      {/* Desktop Table */}
+
       <div className="hidden lg:block overflow-x-auto">
         <table className="w-full">
           <thead className="bg-muted/50">
             <tr>
               <th className="w-12 p-4">
                 <Checkbox
-                  checked={selectedClients?.length === filteredClients?.length && filteredClients?.length > 0}
+                  checked={selectedClients.length === filteredClients.length && filteredClients.length > 0}
                   onChange={(e) => handleSelectAll(e?.target?.checked)}
                 />
               </th>
-              
               <th className="text-left p-4">
                 <button
                   onClick={() => handleSort('nome')}
@@ -237,7 +234,6 @@ const ClientsTable = ({
                   <Icon name={getSortIcon('nome')} size={16} />
                 </button>
               </th>
-              
               <th className="text-left p-4">
                 <button
                   onClick={() => handleSort('planoAtivo')}
@@ -247,7 +243,6 @@ const ClientsTable = ({
                   <Icon name={getSortIcon('planoAtivo')} size={16} />
                 </button>
               </th>
-              
               <th className="text-left p-4">
                 <button
                   onClick={() => handleSort('statusPagamento')}
@@ -257,7 +252,6 @@ const ClientsTable = ({
                   <Icon name={getSortIcon('statusPagamento')} size={16} />
                 </button>
               </th>
-              
               <th className="text-left p-4">
                 <button
                   onClick={() => handleSort('ultimoTreino')}
@@ -267,7 +261,6 @@ const ClientsTable = ({
                   <Icon name={getSortIcon('ultimoTreino')} size={16} />
                 </button>
               </th>
-              
               <th className="text-left p-4">
                 <button
                   onClick={() => handleSort('proximaAvaliacao')}
@@ -277,30 +270,23 @@ const ClientsTable = ({
                   <Icon name={getSortIcon('proximaAvaliacao')} size={16} />
                 </button>
               </th>
-              
               <th className="text-center p-4 w-32">Ações</th>
             </tr>
           </thead>
-          
           <tbody>
-            {filteredClients?.map((client) => (
+            {filteredClients.map((client) => (
               <tr key={client?.id} className="border-t border-border hover:bg-muted/30 transition-colors">
                 <td className="p-4">
                   <Checkbox
-                    checked={selectedClients?.includes(client?.id)}
+                    checked={selectedClients.includes(client?.id)}
                     onChange={(e) => handleSelectClient(client?.id, e?.target?.checked)}
                   />
                 </td>
-                
                 <td className="p-4">
                   <div className="flex items-center space-x-3">
                     <div className="w-10 h-10 bg-secondary rounded-full flex items-center justify-center overflow-hidden">
                       {client?.avatar ? (
-                        <img 
-                          src={client?.avatar} 
-                          alt={client?.avatarAlt}
-                          className="w-full h-full object-cover"
-                        />
+                        <img src={client?.avatar} alt={client?.avatarAlt} className="w-full h-full object-cover" />
                       ) : (
                         <Icon name="User" size={20} color="white" />
                       )}
@@ -311,60 +297,42 @@ const ClientsTable = ({
                     </div>
                   </div>
                 </td>
-                
                 <td className="p-4">
                   <StatusBadge type="subscription" status={client?.planoAtivo} />
                 </td>
-                
                 <td className="p-4">
                   <StatusBadge type="payment" status={client?.statusPagamento} />
                 </td>
-                
                 <td className="p-4">
                   <div>
-                    <p className="text-sm font-medium text-foreground">
-                      {formatDate(client?.ultimoTreino)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {client?.progressoTreino}% concluído
-                    </p>
+                    <p className="text-sm font-medium text-foreground">{formatDate(client?.ultimoTreino)}</p>
+                    <p className="text-xs text-muted-foreground">{client?.progressoTreino}% concluído</p>
                   </div>
                 </td>
-                
                 <td className="p-4">
-                  <p className="text-sm font-medium text-foreground">
-                    {formatDate(client?.proximaAvaliacao)}
-                  </p>
+                  <p className="text-sm font-medium text-foreground">{formatDate(client?.proximaAvaliacao)}</p>
                 </td>
-                
                 <td className="p-4">
-                  <ClientActionMenu
-                    client={client}
-                    onAction={onClientAction}
-                  />
+                  <ClientActionMenu client={client} onAction={onClientAction} />
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      {/* Mobile Cards */}
+
       <div className="lg:hidden">
-        {filteredClients?.map((client) => (
+        {filteredClients.map((client) => (
           <div key={client?.id} className="p-4 border-b border-border last:border-b-0">
             <div className="flex items-start justify-between mb-3">
               <div className="flex items-center space-x-3">
                 <Checkbox
-                  checked={selectedClients?.includes(client?.id)}
+                  checked={selectedClients.includes(client?.id)}
                   onChange={(e) => handleSelectClient(client?.id, e?.target?.checked)}
                 />
                 <div className="w-12 h-12 bg-secondary rounded-full flex items-center justify-center overflow-hidden">
                   {client?.avatar ? (
-                    <img 
-                      src={client?.avatar} 
-                      alt={client?.avatarAlt}
-                      className="w-full h-full object-cover"
-                    />
+                    <img src={client?.avatar} alt={client?.avatarAlt} className="w-full h-full object-cover" />
                   ) : (
                     <Icon name="User" size={24} color="white" />
                   )}
@@ -374,30 +342,23 @@ const ClientsTable = ({
                   <p className="text-sm text-muted-foreground">{client?.email}</p>
                 </div>
               </div>
-              
-              <ClientActionMenu
-                client={client}
-                onAction={onClientAction}
-                variant="mobile"
-              />
+
+              <ClientActionMenu client={client} onAction={onClientAction} variant="mobile" />
             </div>
-            
+
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
                 <p className="text-muted-foreground">Plano</p>
                 <StatusBadge type="subscription" status={client?.planoAtivo} />
               </div>
-              
               <div>
                 <p className="text-muted-foreground">Pagamento</p>
                 <StatusBadge type="payment" status={client?.statusPagamento} />
               </div>
-              
               <div>
                 <p className="text-muted-foreground">Último Treino</p>
                 <p className="font-medium text-foreground">{formatDate(client?.ultimoTreino)}</p>
               </div>
-              
               <div>
                 <p className="text-muted-foreground">Próxima Avaliação</p>
                 <p className="font-medium text-foreground">{formatDate(client?.proximaAvaliacao)}</p>
@@ -406,24 +367,18 @@ const ClientsTable = ({
           </div>
         ))}
       </div>
-      {/* Empty State */}
-      {filteredClients?.length === 0 && (
+
+      {filteredClients.length === 0 && (
         <div className="p-12 text-center">
           <Icon name="Users" size={48} className="mx-auto text-muted-foreground mb-4" />
-          <h3 className="text-lg font-semibold text-foreground mb-2">
-            Nenhum cliente encontrado
-          </h3>
+          <h3 className="text-lg font-semibold text-foreground mb-2">Nenhum cliente encontrado</h3>
           <p className="text-muted-foreground mb-4">
-            {searchTerm || filters?.subscription !== 'all' || filters?.paymentStatus !== 'all' || filters?.activityLevel !== 'all' ?'Tente ajustar os filtros ou termo de busca' :'Comece adicionando seu primeiro cliente'
-            }
+            {searchTerm || filters.subscription !== 'all' || filters.paymentStatus !== 'all' || filters.activityLevel !== 'all'
+              ? 'Tente ajustar os filtros ou termo de busca'
+              : 'Comece adicionando seu primeiro cliente'}
           </p>
-          {(!searchTerm && filters?.subscription === 'all' && filters?.paymentStatus === 'all' && filters?.activityLevel === 'all') && (
-            <Button
-              variant="default"
-              onClick={() => onClientAction && onClientAction('add', null)}
-              iconName="UserPlus"
-              iconPosition="left"
-            >
+          {(!searchTerm && filters.subscription === 'all' && filters.paymentStatus === 'all' && filters.activityLevel === 'all') && (
+            <Button variant="default" onClick={() => onClientAction && onClientAction('add', null)} iconName="UserPlus" iconPosition="left">
               Adicionar Cliente
             </Button>
           )}

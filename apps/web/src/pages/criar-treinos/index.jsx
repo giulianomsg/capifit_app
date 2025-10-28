@@ -1,328 +1,398 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import Icon from '../../components/AppIcon';
-import Button from '../../components/ui/Button';
+
 import Header from '../../components/ui/Header';
 import Sidebar from '../../components/ui/Sidebar';
+import Button from '../../components/ui/Button';
+import { useAuth } from '../../contexts/AuthContext';
+import { listClients } from '../../services/clientService';
+import { createWorkout } from '../../services/workoutService';
 import ExerciseLibraryPanel from './components/ExerciseLibraryPanel';
 import WorkoutBuilder from './components/WorkoutBuilder';
 import WorkoutMetadata from './components/WorkoutMetadata';
 import WorkoutTemplates from './components/WorkoutTemplates';
 
+const INITIAL_BLOCK = {
+  id: 'block-main',
+  title: 'Bloco principal',
+  order: 0,
+  exercises: [],
+};
+
+const INITIAL_METADATA = {
+  title: '',
+  clientId: '',
+  startDate: '',
+  frequency: 'weekly',
+  difficulty: 'INTERMEDIATE',
+  description: '',
+  schedule: [],
+  estimatedDuration: 0,
+  estimatedCalories: 0,
+  isTemplate: false,
+};
+
+const DEFAULT_EXERCISE_CONFIG = {
+  sets: 3,
+  reps: 12,
+  restSeconds: 60,
+};
+
+const getMutationErrorMessage = (error) => {
+  if (error?.response?.data?.message) {
+    return error.response.data.message;
+  }
+  return error?.message ?? 'Não foi possível salvar o treino.';
+};
+
+const difficultyOptions = [
+  { value: 'BEGINNER', label: 'Iniciante' },
+  { value: 'INTERMEDIATE', label: 'Intermediário' },
+  { value: 'ADVANCED', label: 'Avançado' },
+];
+
+const frequencyOptions = [
+  { value: 'daily', label: 'Diário' },
+  { value: 'weekly', label: 'Semanal' },
+  { value: 'muscle-group', label: 'Por grupo muscular' },
+  { value: 'custom', label: 'Personalizado' },
+];
+
+const calculateDuration = (blocks) => {
+  const totalSeconds = blocks.reduce((total, block) => {
+    return (
+      total +
+      block.exercises.reduce((acc, exercise) => {
+        const workTime = exercise.sets * exercise.reps * 2;
+        const restTime = exercise.restSeconds ?? DEFAULT_EXERCISE_CONFIG.restSeconds;
+        return acc + workTime + restTime;
+      }, 0)
+    );
+  }, 0);
+
+  return Math.max(0, Math.round(totalSeconds / 60));
+};
+
+const calculateCalories = (blocks) => {
+  return blocks.reduce((total, block) => {
+    return (
+      total +
+      block.exercises.reduce((acc, exercise) => {
+        const calories = exercise.exercise?.caloriesPerSet ?? 6;
+        return acc + calories * exercise.sets;
+      }, 0)
+    );
+  }, 0);
+};
+
 const CriarTreinos = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
-  const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
-  const [activeView, setActiveView] = useState('builder'); // 'builder', 'metadata', 'templates'
-  
-  // Workout state
-  const [exercises, setExercises] = useState([]);
-  const [workoutMetadata, setWorkoutMetadata] = useState({
-    nome: '',
-    clienteId: '',
-    dataInicio: new Date()?.toISOString()?.split('T')?.[0],
-    frequencia: 'weekly',
-    dificuldade: 'intermediario',
-    descricao: '',
-    schedule: [],
-    totalExercicios: 0,
-    duracaoEstimada: 0,
-    caloriasEstimadas: 0
+  const [activeView, setActiveView] = useState('builder');
+  const [blocks, setBlocks] = useState([INITIAL_BLOCK]);
+  const [metadata, setMetadata] = useState(INITIAL_METADATA);
+  const [feedback, setFeedback] = useState(null);
+
+  const { data: clientsResponse, isLoading: isLoadingClients } = useQuery({
+    queryKey: ['clients', 'selector'],
+    queryFn: async () => {
+      const response = await listClients({ perPage: 100 });
+      return response.data ?? [];
+    },
   });
 
-  // Update metadata when exercises change
-  useEffect(() => {
-    const totalExercicios = exercises?.length;
-    const duracaoEstimada = Math.ceil(
-      exercises?.reduce((total, ex) => total + (ex?.series * ex?.repeticoes * 3) + ex?.tempoDescanso, 0) / 60
-    );
-    const caloriasEstimadas = exercises?.reduce((total, ex) => total + (ex?.calorias * ex?.series), 0);
+  const clients = clientsResponse ?? [];
 
-    setWorkoutMetadata(prev => ({
-      ...prev,
-      totalExercicios,
-      duracaoEstimada,
-      caloriasEstimadas
-    }));
-  }, [exercises]);
+  const totalExercises = useMemo(
+    () => blocks.reduce((acc, block) => acc + block.exercises.length, 0),
+    [blocks],
+  );
 
-  const handleSidebarToggle = () => {
-    setIsSidebarOpen(!isSidebarOpen);
-  };
+  const computedMetadata = useMemo(() => {
+    const estimatedDuration = calculateDuration(blocks);
+    const estimatedCalories = calculateCalories(blocks);
+    return {
+      ...metadata,
+      totalExercises,
+      estimatedDuration,
+      estimatedCalories,
+    };
+  }, [blocks, metadata, totalExercises]);
+
+  const createWorkoutMutation = useMutation({
+    mutationFn: (payload) => createWorkout(payload),
+    onSuccess: (workout, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['workouts'] });
+      queryClient.invalidateQueries({ queryKey: ['workout-summary'] });
+      setFeedback({ type: 'success', message: 'Treino salvo com sucesso.' });
+      setBlocks([INITIAL_BLOCK]);
+      setMetadata(INITIAL_METADATA);
+      setActiveView('builder');
+      if (!variables?.isTemplate && workout?.id) {
+        navigate(`/workout-session-tracking/${workout.id}`);
+      }
+    },
+    onError: (error) => {
+      setFeedback({ type: 'error', message: getMutationErrorMessage(error) });
+    },
+  });
+
+  const handleSidebarToggle = () => setIsSidebarOpen((prev) => !prev);
 
   const handleAddExercise = (exercise) => {
-    setExercises(prev => [...prev, exercise]);
-    setIsLibraryOpen(false); // Close library on mobile after adding
+    setBlocks((prevBlocks) => {
+      const next = [...prevBlocks];
+      const block = next[0];
+      const entry = {
+        id: `${exercise.id}-${Date.now()}`,
+        exercise,
+        sets: DEFAULT_EXERCISE_CONFIG.sets,
+        reps: DEFAULT_EXERCISE_CONFIG.reps,
+        restSeconds: DEFAULT_EXERCISE_CONFIG.restSeconds,
+        order: block.exercises.length,
+      };
+      block.exercises = [...block.exercises, entry];
+      return next;
+    });
+    setIsLibraryOpen(false);
   };
 
-  const handleUpdateExercise = (index, updates) => {
-    setExercises(prev => prev?.map((ex, i) => i === index ? { ...ex, ...updates } : ex));
-  };
-
-  const handleRemoveExercise = (index) => {
-    setExercises(prev => prev?.filter((_, i) => i !== index));
-  };
-
-  const handleReorderExercises = (fromIndex, toIndex) => {
-    setExercises(prev => {
-      const newExercises = [...prev];
-      const [movedExercise] = newExercises?.splice(fromIndex, 1);
-      newExercises?.splice(toIndex, 0, movedExercise);
-      return newExercises;
+  const handleUpdateExercise = (exerciseId, updates) => {
+    setBlocks((prevBlocks) => {
+      return prevBlocks.map((block) => ({
+        ...block,
+        exercises: block.exercises.map((exercise) =>
+          exercise.id === exerciseId ? { ...exercise, ...updates } : exercise,
+        ),
+      }));
     });
   };
 
-  const handleUpdateMetadata = (updates) => {
-    setWorkoutMetadata(prev => ({ ...prev, ...updates }));
-  };
-
-  const handleSaveWorkout = () => {
-    if (!workoutMetadata?.nome || !workoutMetadata?.clienteId || exercises?.length === 0) {
-      alert('Preencha todas as informações obrigatórias e adicione pelo menos um exercício');
-      return;
-    }
-
-    // Simulate save
-    console.log('Saving workout:', { metadata: workoutMetadata, exercises });
-    alert('Treino salvo com sucesso!');
-    
-    // Reset form
-    setExercises([]);
-    setWorkoutMetadata({
-      nome: '',
-      clienteId: '',
-      dataInicio: new Date()?.toISOString()?.split('T')?.[0],
-      frequencia: 'weekly',
-      dificuldade: 'intermediario',
-      descricao: '',
-      schedule: [],
-      totalExercicios: 0,
-      duracaoEstimada: 0,
-      caloriasEstimadas: 0
+  const handleRemoveExercise = (exerciseId) => {
+    setBlocks((prevBlocks) => {
+      return prevBlocks.map((block) => ({
+        ...block,
+        exercises: block.exercises
+          .filter((exercise) => exercise.id !== exerciseId)
+          .map((exercise, index) => ({ ...exercise, order: index })),
+      }));
     });
-    setActiveView('builder');
   };
 
-  const handleSaveTemplate = () => {
-    if (!workoutMetadata?.nome || exercises?.length === 0) {
-      alert('Adicione um nome e pelo menos um exercício para salvar como template');
-      return;
+  const handleReorderExercise = (exerciseId, direction) => {
+    setBlocks((prevBlocks) => {
+      return prevBlocks.map((block) => {
+        const index = block.exercises.findIndex((exercise) => exercise.id === exerciseId);
+        if (index === -1) return block;
+
+        const newIndex = index + direction;
+        if (newIndex < 0 || newIndex >= block.exercises.length) {
+          return block;
+        }
+
+        const reordered = [...block.exercises];
+        const [item] = reordered.splice(index, 1);
+        reordered.splice(newIndex, 0, item);
+
+        return {
+          ...block,
+          exercises: reordered.map((exercise, idx) => ({ ...exercise, order: idx })),
+        };
+      });
+    });
+  };
+
+  const handleMetadataChange = (updates) => {
+    setMetadata((prev) => ({ ...prev, ...updates }));
+    setFeedback(null);
+  };
+
+  const buildPayload = (override = {}) => {
+    const base = { ...metadata, ...override };
+
+    if (!base.title?.trim()) {
+      throw new Error('Informe um nome para o treino.');
     }
 
-    // Simulate template save
-    console.log('Saving template:', { metadata: workoutMetadata, exercises });
-    alert('Template salvo com sucesso!');
+    if (!base.isTemplate && !base.clientId) {
+      throw new Error('Selecione um cliente para o treino.');
+    }
+
+    if (totalExercises === 0) {
+      throw new Error('Adicione ao menos um exercício ao treino.');
+    }
+
+    return {
+      title: base.title,
+      description: base.description || undefined,
+      difficulty: base.difficulty,
+      status: base.isTemplate ? 'DRAFT' : 'ACTIVE',
+      frequency: base.frequency,
+      schedule: base.schedule,
+      startDate: base.startDate || undefined,
+      estimatedDuration: computedMetadata.estimatedDuration,
+      estimatedCalories: computedMetadata.estimatedCalories,
+      isTemplate: Boolean(base.isTemplate),
+      clientId: base.isTemplate ? undefined : base.clientId,
+      blocks: blocks.map((block) => ({
+        title: block.title,
+        order: block.order,
+        exercises: block.exercises.map((exercise, index) => ({
+          exerciseId: exercise.exercise.id,
+          order: index,
+          sets: Number(exercise.sets) || DEFAULT_EXERCISE_CONFIG.sets,
+          reps: Number(exercise.reps) || DEFAULT_EXERCISE_CONFIG.reps,
+          restSeconds: Number(exercise.restSeconds) || DEFAULT_EXERCISE_CONFIG.restSeconds,
+        })),
+      })),
+    };
+  };
+
+  const handleSave = async (asTemplate = false) => {
+    try {
+      const payload = buildPayload({ isTemplate: asTemplate });
+      await createWorkoutMutation.mutateAsync(payload);
+    } catch (error) {
+      setFeedback({ type: 'error', message: getMutationErrorMessage(error) });
+    }
   };
 
   const handleLoadTemplate = (template) => {
-    // Simulate loading template exercises
-    const templateExercises = template?.exerciciosPreview?.map((nome, index) => ({
-      id: index + 1,
-      nome,
-      categoria: template?.categoria,
-      grupoMuscular: 'geral',
-      series: 3,
-      repeticoes: 12,
-      peso: 0,
-      tempoDescanso: 60,
-      calorias: 5
+    const nextBlocks = template.blocks.map((block) => ({
+      id: block.id,
+      title: block.title,
+      order: block.order,
+      exercises: block.exercises.map((exercise) => ({
+        id: `${exercise.exercise.id}-${Date.now()}`,
+        exercise: exercise.exercise,
+        sets: exercise.sets,
+        reps: exercise.reps,
+        restSeconds: exercise.restSeconds ?? DEFAULT_EXERCISE_CONFIG.restSeconds,
+        order: exercise.order,
+      })),
     }));
 
-    setExercises(templateExercises);
-    setWorkoutMetadata(prev => ({
+    setBlocks(nextBlocks.length > 0 ? nextBlocks : [INITIAL_BLOCK]);
+    setMetadata((prev) => ({
       ...prev,
-      nome: template?.nome,
-      dificuldade: template?.dificuldade?.toLowerCase()
+      title: template.title,
+      description: template.description ?? '',
+      difficulty: template.difficulty,
+      schedule: template.schedule ?? [],
+      frequency: template.frequency ?? 'weekly',
+      estimatedDuration: template.estimatedDuration ?? 0,
+      estimatedCalories: template.estimatedCalories ?? 0,
+      isTemplate: false,
     }));
-    
+    setFeedback({ type: 'success', message: 'Template carregado. Personalize e salve para seu aluno.' });
     setActiveView('builder');
-    setIsTemplatesOpen(false);
-    alert(`Template "${template?.nome}" carregado com sucesso!`);
   };
 
-  const getViewTitle = () => {
-    switch (activeView) {
-      case 'metadata': return 'Informações do Treino';
-      case 'templates': return 'Templates Salvos';
-      default: return 'Construtor de Treino';
-    }
-  };
+  const viewTitle = useMemo(() => {
+    if (activeView === 'metadata') return 'Informações do Treino';
+    if (activeView === 'templates') return 'Templates Salvos';
+    return 'Construtor de Treino';
+  }, [activeView]);
 
   return (
     <div className="min-h-screen bg-background">
       <Header onMenuToggle={handleSidebarToggle} isMenuOpen={isSidebarOpen} />
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+
       <main className="lg:ml-64 pt-16">
-        <div className="p-4 lg:p-6">
-          {/* Page Header */}
-          <div className="mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h1 className="text-2xl lg:text-3xl font-bold text-foreground">
-                  Criar Treinos
-                </h1>
-                <p className="text-muted-foreground mt-1">
-                  Construa treinos personalizados para seus clientes
-                </p>
-              </div>
-              
-              {/* Mobile Action Buttons */}
-              <div className="flex items-center space-x-2 lg:hidden">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setIsTemplatesOpen(!isTemplatesOpen)}
-                >
-                  <Icon name="FileText" size={20} />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setIsLibraryOpen(!isLibraryOpen)}
-                >
-                  <Icon name="Library" size={20} />
-                </Button>
-              </div>
+        <div className="p-4 lg:p-6 space-y-6">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold text-foreground">{viewTitle}</h1>
+              <p className="text-muted-foreground">
+                Organize os exercícios, defina metas e compartilhe com seus alunos.
+              </p>
             </div>
-
-            {/* Navigation Tabs - Mobile */}
-            <div className="flex space-x-1 bg-muted p-1 rounded-lg lg:hidden">
-              <button
-                onClick={() => setActiveView('builder')}
-                className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                  activeView === 'builder' ?'bg-background text-foreground shadow-sm' :'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <Icon name="Dumbbell" size={16} className="inline mr-2" />
+            <div className="flex flex-wrap gap-3">
+              <Button variant={activeView === 'builder' ? 'default' : 'outline'} onClick={() => setActiveView('builder')}>
                 Construtor
-              </button>
-              <button
-                onClick={() => setActiveView('metadata')}
-                className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                  activeView === 'metadata' ?'bg-background text-foreground shadow-sm' :'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <Icon name="Settings" size={16} className="inline mr-2" />
-                Detalhes
-              </button>
-            </div>
-
-            {/* Progress Indicator */}
-            <div className="mt-4 bg-card border border-border rounded-lg p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-foreground">Progresso do Treino</span>
-                <span className="text-sm text-muted-foreground">
-                  {exercises?.length > 0 && workoutMetadata?.nome && workoutMetadata?.clienteId ? '100%' : 
-                   exercises?.length > 0 || workoutMetadata?.nome ? '50%' : '0%'}
-                </span>
-              </div>
-              <div className="w-full bg-muted rounded-full h-2">
-                <div 
-                  className="bg-primary h-2 rounded-full transition-all duration-300"
-                  style={{
-                    width: exercises?.length > 0 && workoutMetadata?.nome && workoutMetadata?.clienteId ? '100%' : 
-                           exercises?.length > 0 || workoutMetadata?.nome ? '50%' : '0%'
-                  }}
-                />
-              </div>
-              <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
-                <span>Exercícios: {exercises?.length}</span>
-                <span>Duração: ~{workoutMetadata?.duracaoEstimada}min</span>
-                <span>Calorias: ~{workoutMetadata?.caloriasEstimadas}</span>
-              </div>
+              </Button>
+              <Button variant={activeView === 'metadata' ? 'default' : 'outline'} onClick={() => setActiveView('metadata')}>
+                Informações
+              </Button>
+              <Button variant={activeView === 'templates' ? 'default' : 'outline'} onClick={() => setActiveView('templates')}>
+                Templates
+              </Button>
             </div>
           </div>
 
-          {/* Main Content */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[calc(100vh-280px)]">
-            {/* Templates Panel - Desktop */}
-            <div className="hidden lg:block lg:col-span-3">
-              <WorkoutTemplates
-                onLoadTemplate={handleLoadTemplate}
-                isOpen={true}
-                onToggle={() => {}}
-              />
+          {feedback && (
+            <div
+              className={`rounded-md border px-4 py-3 text-sm ${
+                feedback.type === 'success'
+                  ? 'border-emerald-400 bg-emerald-50 text-emerald-700'
+                  : 'border-red-400 bg-red-50 text-red-700'
+              }`}
+            >
+              {feedback.message}
             </div>
+          )}
 
-            {/* Main Workspace */}
-            <div className="lg:col-span-6">
+          <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
+            <section className="xl:col-span-3 space-y-6">
               {activeView === 'builder' && (
-                <WorkoutBuilder
-                  exercises={exercises}
-                  onUpdateExercise={handleUpdateExercise}
-                  onRemoveExercise={handleRemoveExercise}
-                  onReorderExercises={handleReorderExercises}
-                />
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                  <div className="lg:col-span-3">
+                    <WorkoutBuilder
+                      blocks={blocks}
+                      onUpdateExercise={handleUpdateExercise}
+                      onRemoveExercise={handleRemoveExercise}
+                      onReorderExercise={handleReorderExercise}
+                    />
+                  </div>
+                  <div className="lg:col-span-1">
+                    <WorkoutMetadata
+                      metadata={computedMetadata}
+                      clients={clients}
+                      clientsLoading={isLoadingClients}
+                      difficultyOptions={difficultyOptions}
+                      frequencyOptions={frequencyOptions}
+                      onUpdate={handleMetadataChange}
+                      onSaveWorkout={() => handleSave(false)}
+                      onSaveTemplate={() => handleSave(true)}
+                      isSaving={createWorkoutMutation.isPending}
+                    />
+                  </div>
+                </div>
               )}
-              
+
               {activeView === 'metadata' && (
                 <WorkoutMetadata
-                  metadata={workoutMetadata}
-                  onUpdateMetadata={handleUpdateMetadata}
-                  onSaveWorkout={handleSaveWorkout}
-                  onSaveTemplate={handleSaveTemplate}
+                  metadata={computedMetadata}
+                  clients={clients}
+                  clientsLoading={isLoadingClients}
+                  difficultyOptions={difficultyOptions}
+                  frequencyOptions={frequencyOptions}
+                  onUpdate={handleMetadataChange}
+                  onSaveWorkout={() => handleSave(false)}
+                  onSaveTemplate={() => handleSave(true)}
+                  isSaving={createWorkoutMutation.isPending}
+                  showExtended
                 />
               )}
 
               {activeView === 'templates' && (
-                <div className="lg:hidden">
-                  <WorkoutTemplates
-                    onLoadTemplate={handleLoadTemplate}
-                    isOpen={true}
-                    onToggle={() => setActiveView('builder')}
-                  />
-                </div>
+                <WorkoutTemplates onApplyTemplate={handleLoadTemplate} />
               )}
-            </div>
+            </section>
 
-            {/* Exercise Library Panel - Desktop */}
-            <div className="hidden lg:block lg:col-span-3">
+            <aside className="xl:col-span-1">
               <ExerciseLibraryPanel
+                isOpen={isLibraryOpen || activeView === 'builder'}
+                onToggle={() => setIsLibraryOpen((prev) => !prev)}
                 onAddExercise={handleAddExercise}
-                isOpen={true}
-                onToggle={() => {}}
               />
-            </div>
-          </div>
-
-          {/* Mobile Panels */}
-          {isLibraryOpen && (
-            <div className="fixed inset-0 z-50 bg-background lg:hidden">
-              <ExerciseLibraryPanel
-                onAddExercise={handleAddExercise}
-                isOpen={isLibraryOpen}
-                onToggle={() => setIsLibraryOpen(false)}
-              />
-            </div>
-          )}
-
-          {isTemplatesOpen && (
-            <div className="fixed inset-0 z-50 bg-background lg:hidden">
-              <WorkoutTemplates
-                onLoadTemplate={handleLoadTemplate}
-                isOpen={isTemplatesOpen}
-                onToggle={() => setIsTemplatesOpen(false)}
-              />
-            </div>
-          )}
-
-          {/* Quick Actions - Mobile */}
-          <div className="fixed bottom-4 right-4 flex flex-col space-y-2 lg:hidden">
-            {activeView === 'builder' && exercises?.length > 0 && (
-              <Button
-                onClick={() => setActiveView('metadata')}
-                className="w-14 h-14 rounded-full shadow-lg"
-                iconName="ArrowRight"
-              />
-            )}
-            
-            <Button
-              onClick={() => setIsLibraryOpen(true)}
-              variant="secondary"
-              className="w-14 h-14 rounded-full shadow-lg"
-              iconName="Plus"
-            />
+            </aside>
           </div>
         </div>
       </main>

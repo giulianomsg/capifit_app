@@ -1,57 +1,54 @@
 import React from 'react';
+
 import Select from '../../../components/ui/Select';
 
-const ExerciseFilters = ({
-  selectedCategory,
-  selectedMuscleGroup,
-  selectedDifficulty,
-  selectedEquipment,
-  onCategoryChange,
-  onMuscleGroupChange,
-  onDifficultyChange,
-  onEquipmentChange,
-  filterOptions
-}) => {
+const categoryOptions = [
+  { value: '', label: 'Todas as categorias' },
+  { value: 'STRENGTH', label: 'Força' },
+  { value: 'CARDIO', label: 'Cardio' },
+  { value: 'FLEXIBILITY', label: 'Flexibilidade' },
+  { value: 'MOBILITY', label: 'Mobilidade' },
+  { value: 'BALANCE', label: 'Equilíbrio' },
+];
+
+const muscleOptions = [
+  { value: '', label: 'Todos os grupos' },
+  { value: 'CHEST', label: 'Peito' },
+  { value: 'BACK', label: 'Costas' },
+  { value: 'LEGS', label: 'Pernas' },
+  { value: 'ARMS', label: 'Braços' },
+  { value: 'CORE', label: 'Core' },
+  { value: 'SHOULDERS', label: 'Ombros' },
+  { value: 'GLUTES', label: 'Glúteos' },
+];
+
+const difficultyOptions = [
+  { value: '', label: 'Todas as dificuldades' },
+  { value: 'BEGINNER', label: 'Iniciante' },
+  { value: 'INTERMEDIATE', label: 'Intermediário' },
+  { value: 'ADVANCED', label: 'Avançado' },
+];
+
+const ExerciseFilters = ({ filters, onChange }) => {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="bg-card border border-border rounded-lg p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       <Select
         label="Categoria"
-        value={selectedCategory}
-        onChange={(e) => onCategoryChange(e?.target?.value)}
-        options={[
-          { value: 'all', label: 'Todas as categorias' },
-          ...filterOptions?.categories?.map(cat => ({ value: cat, label: cat }))
-        ]}
+        value={filters.category}
+        onChange={(value) => onChange({ category: value })}
+        options={categoryOptions}
       />
-
       <Select
-        label="Grupo Muscular"
-        value={selectedMuscleGroup}
-        onChange={(e) => onMuscleGroupChange(e?.target?.value)}
-        options={[
-          { value: 'all', label: 'Todos os grupos' },
-          ...filterOptions?.muscleGroups?.map(group => ({ value: group, label: group }))
-        ]}
+        label="Grupo muscular"
+        value={filters.muscleGroup}
+        onChange={(value) => onChange({ muscleGroup: value })}
+        options={muscleOptions}
       />
-
       <Select
         label="Dificuldade"
-        value={selectedDifficulty}
-        onChange={(e) => onDifficultyChange(e?.target?.value)}
-        options={[
-          { value: 'all', label: 'Todas as dificuldades' },
-          ...filterOptions?.difficulties?.map(diff => ({ value: diff, label: diff }))
-        ]}
-      />
-
-      <Select
-        label="Equipamento"
-        value={selectedEquipment}
-        onChange={(e) => onEquipmentChange(e?.target?.value)}
-        options={[
-          { value: 'all', label: 'Todos os equipamentos' },
-          ...filterOptions?.equipment?.map(eq => ({ value: eq, label: eq }))
-        ]}
+        value={filters.difficulty}
+        onChange={(value) => onChange({ difficulty: value })}
+        options={difficultyOptions}
       />
     </div>
   );

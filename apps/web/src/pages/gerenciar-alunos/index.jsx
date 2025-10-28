@@ -1,237 +1,281 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+
 import Icon from '../../components/AppIcon';
 import Button from '../../components/ui/Button';
 import ClientsTable from './components/ClientsTable';
 import ClientMetricsPanel from './components/ClientMetricsPanel';
 import AddClientModal from './components/AddClientModal';
+import {
+  createClient,
+  deleteClient,
+  listClients,
+  updateClient,
+} from '../../services/clientService';
+
+const subscriptionMap = {
+  MONTHLY: 'mensal',
+  QUARTERLY: 'trimestral',
+  ANNUAL: 'anual',
+  CUSTOM: 'personalizado',
+};
+
+const paymentMap = {
+  ON_TIME: 'em-dia',
+  PENDING: 'pendente',
+  LATE: 'atrasado',
+};
+
+const activityMap = {
+  HIGH: 'alto',
+  MEDIUM: 'medio',
+  LOW: 'baixo',
+  INACTIVE: 'inativo',
+};
+
+const inverseSubscriptionMap = {
+  mensal: 'MONTHLY',
+  trimestral: 'QUARTERLY',
+  anual: 'ANNUAL',
+};
+
+const inversePaymentMap = {
+  'em-dia': 'ON_TIME',
+  pendente: 'PENDING',
+  atrasado: 'LATE',
+};
+
+const experienceToActivityMap = {
+  iniciante: 'LOW',
+  intermediario: 'MEDIUM',
+  avancado: 'HIGH',
+};
+
+const activityToApiMap = {
+  alto: 'HIGH',
+  medio: 'MEDIUM',
+  baixo: 'LOW',
+  inativo: 'INACTIVE',
+};
+
+const transformClient = (assignment) => {
+  const profile = assignment?.client?.clientProfile ?? {};
+
+  return {
+    id: assignment?.id,
+    assignmentId: assignment?.id,
+    userId: assignment?.clientId,
+    nome: assignment?.client?.name ?? 'Cliente',
+    email: assignment?.client?.email ?? '',
+    avatar: assignment?.client?.avatarUrl ?? '',
+    avatarAlt: assignment?.client?.name ? `Foto de ${assignment.client.name}` : 'Avatar do cliente',
+    planoAtivo: subscriptionMap[profile?.subscriptionPlan] ?? 'personalizado',
+    statusPagamento: paymentMap[profile?.paymentStatus] ?? 'pendente',
+    ultimoTreino: profile?.lastWorkoutAt ?? assignment?.updatedAt,
+    proximaAvaliacao: profile?.nextAssessmentAt ?? null,
+    progressoTreino: profile?.progressPercentage ?? 0,
+    nivelAtividade: activityMap[profile?.activityLevel] ?? 'medio',
+    telefone: assignment?.client?.phone ?? '',
+    dataInscricao: assignment?.startedAt,
+    statusRelacionamento: assignment?.status ?? 'ACTIVE',
+    raw: assignment,
+  };
+};
+
+const transformMetrics = (metrics) => {
+  if (!metrics) return null;
+
+  return {
+    totalClients: metrics.totalClients,
+    activeClients: metrics.activeClients,
+    pausedClients: metrics.pausedClients,
+    endedClients: metrics.endedClients,
+    newThisMonth: metrics.newThisMonth,
+    averageProgress: metrics.averageProgress,
+    subscriptionDistribution: [
+      { name: 'Mensal', value: metrics.subscriptionDistribution.MONTHLY, color: 'var(--color-primary)' },
+      { name: 'Trimestral', value: metrics.subscriptionDistribution.QUARTERLY, color: 'var(--color-secondary)' },
+      { name: 'Anual', value: metrics.subscriptionDistribution.ANNUAL, color: 'var(--color-accent)' },
+      { name: 'Personalizado', value: metrics.subscriptionDistribution.CUSTOM, color: 'var(--color-warning)' },
+    ],
+    paymentStatus: {
+      emDia: metrics.paymentStatus.ON_TIME,
+      pendente: metrics.paymentStatus.PENDING,
+      atrasado: metrics.paymentStatus.LATE,
+    },
+    activityLevels: {
+      alto: metrics.activityLevels.HIGH,
+      medio: metrics.activityLevels.MEDIUM,
+      baixo: metrics.activityLevels.LOW,
+      inativo: metrics.activityLevels.INACTIVE,
+    },
+  };
+};
 
 const GerenciarAlunos = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [showAddModal, setShowAddModal] = useState(false);
-  const [viewMode, setViewMode] = useState('table'); // 'table' | 'metrics'
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
-
-  // Mock clients data
-  const [clients] = useState([
-  {
-    id: 1,
-    nome: "Maria Santos Silva",
-    email: "maria.santos@email.com",
-    avatar: "https://images.unsplash.com/photo-1665023024202-4c8671802bf6",
-    avatarAlt: "Professional headshot of woman with shoulder-length brown hair wearing white blouse",
-    planoAtivo: "mensal",
-    statusPagamento: "em-dia",
-    ultimoTreino: "2025-10-26",
-    proximaAvaliacao: "2025-11-02",
-    progressoTreino: 85,
-    nivelAtividade: "alto",
-    telefone: "(11) 99999-1234",
-    dataInscricao: "2025-08-15"
-  },
-  {
-    id: 2,
-    nome: "Carlos Eduardo Oliveira",
-    email: "carlos.oliveira@email.com",
-    avatar: "https://images.unsplash.com/photo-1534734104609-f283d18e2478",
-    avatarAlt: "Professional headshot of man with short dark hair wearing navy blue shirt",
-    planoAtivo: "trimestral",
-    statusPagamento: "em-dia",
-    ultimoTreino: "2025-10-25",
-    proximaAvaliacao: "2025-11-05",
-    progressoTreino: 92,
-    nivelAtividade: "alto",
-    telefone: "(11) 98888-5678",
-    dataInscricao: "2025-07-20"
-  },
-  {
-    id: 3,
-    nome: "Ana Paula Costa",
-    email: "ana.costa@email.com",
-    avatar: "https://images.unsplash.com/photo-1651818428737-0bb5f3adc6e9",
-    avatarAlt: "Professional headshot of woman with long blonde hair wearing light blue top",
-    planoAtivo: "anual",
-    statusPagamento: "pendente",
-    ultimoTreino: "2025-10-24",
-    proximaAvaliacao: "2025-11-08",
-    progressoTreino: 67,
-    nivelAtividade: "medio",
-    telefone: "(11) 97777-9012",
-    dataInscricao: "2025-06-10"
-  },
-  {
-    id: 4,
-    nome: "Pedro Henrique Lima",
-    email: "pedro.lima@email.com",
-    avatar: "https://images.unsplash.com/photo-1492140377033-831754a4702f",
-    avatarAlt: "Professional headshot of young man with curly hair wearing gray sweater",
-    planoAtivo: "mensal",
-    statusPagamento: "atrasado",
-    ultimoTreino: "2025-10-20",
-    proximaAvaliacao: "2025-11-12",
-    progressoTreino: 45,
-    nivelAtividade: "baixo",
-    telefone: "(11) 96666-3456",
-    dataInscricao: "2025-09-05"
-  },
-  {
-    id: 5,
-    nome: "Juliana Ferreira",
-    email: "juliana.ferreira@email.com",
-    avatar: "https://images.unsplash.com/photo-1727784892015-4f4b8d67a083",
-    avatarAlt: "Professional headshot of woman with short dark hair wearing black blazer",
-    planoAtivo: "trimestral",
-    statusPagamento: "em-dia",
-    ultimoTreino: "2025-10-26",
-    proximaAvaliacao: "2025-10-30",
-    progressoTreino: 78,
-    nivelAtividade: "medio",
-    telefone: "(11) 95555-7890",
-    dataInscricao: "2025-05-18"
-  },
-  {
-    id: 6,
-    nome: "Roberto Silva Junior",
-    email: "roberto.junior@email.com",
-    avatar: "https://images.unsplash.com/photo-1587776535733-b4c80a99ef82",
-    avatarAlt: "Professional headshot of man with beard wearing white dress shirt",
-    planoAtivo: "mensal",
-    statusPagamento: "em-dia",
-    ultimoTreino: "2025-10-23",
-    proximaAvaliacao: "2025-11-15",
-    progressoTreino: 56,
-    nivelAtividade: "medio",
-    telefone: "(11) 94444-2468",
-    dataInscricao: "2025-08-30"
-  },
-  {
-    id: 7,
-    nome: "Fernanda Rodrigues",
-    email: "fernanda.rodrigues@email.com",
-    avatar: "https://images.unsplash.com/photo-1605980625744-8d816a169f60",
-    avatarAlt: "Professional headshot of woman with wavy brown hair wearing red top",
-    planoAtivo: "anual",
-    statusPagamento: "em-dia",
-    ultimoTreino: "2025-10-26",
-    proximaAvaliacao: "2025-11-01",
-    progressoTreino: 89,
-    nivelAtividade: "alto",
-    telefone: "(11) 93333-1357",
-    dataInscricao: "2025-04-12"
-  },
-  {
-    id: 8,
-    nome: "Lucas Martins",
-    email: "lucas.martins@email.com",
-    avatar: "https://images.unsplash.com/photo-1632866892073-0b6bfafb2947",
-    avatarAlt: "Professional headshot of young man with short brown hair wearing casual shirt",
-    planoAtivo: "mensal",
-    statusPagamento: "pendente",
-    ultimoTreino: "2025-10-18",
-    proximaAvaliacao: "2025-11-20",
-    progressoTreino: 34,
-    nivelAtividade: "inativo",
-    telefone: "(11) 92222-9876",
-    dataInscricao: "2025-09-22"
-  }]
-  );
+  const [viewMode, setViewMode] = useState('table');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filters, setFilters] = useState({
+    subscription: 'all',
+    paymentStatus: 'all',
+    activityLevel: 'all',
+  });
+  const [feedback, setFeedback] = useState(null);
 
   useEffect(() => {
-    document.title = "Gerenciar Alunos - CapiFit";
+    document.title = 'Gerenciar Alunos - CapiFit';
   }, []);
 
-  const handleClientAction = (action, client) => {
+  const subscriptionFilter = filters.subscription !== 'all' ? inverseSubscriptionMap[filters.subscription] : undefined;
+  const paymentFilter = filters.paymentStatus !== 'all' ? inversePaymentMap[filters.paymentStatus] : undefined;
+  const activityFilter = filters.activityLevel !== 'all' ? activityToApiMap[filters.activityLevel] : undefined;
+
+  const clientsQuery = useQuery({
+    queryKey: ['clients', searchTerm, filters],
+    queryFn: () =>
+      listClients({
+        search: searchTerm || undefined,
+        subscription: subscriptionFilter ? [subscriptionFilter] : undefined,
+        paymentStatus: paymentFilter ? [paymentFilter] : undefined,
+        activityLevel: activityFilter ? [activityFilter] : undefined,
+      }),
+    staleTime: 60_000,
+  });
+
+  const createClientMutation = useMutation({
+    mutationFn: (payload) => createClient(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      setFeedback({ type: 'success', message: 'Cliente adicionado com sucesso.' });
+      setShowAddModal(false);
+    },
+    onError: (error) => {
+      const message = error?.response?.data?.message ?? 'Não foi possível adicionar o cliente.';
+      setFeedback({ type: 'error', message });
+    },
+  });
+
+  const updateClientMutation = useMutation({
+    mutationFn: ({ assignmentId, payload }) => updateClient(assignmentId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      setFeedback({ type: 'success', message: 'Dados do cliente atualizados.' });
+    },
+    onError: (error) => {
+      const message = error?.response?.data?.message ?? 'Não foi possível atualizar o cliente.';
+      setFeedback({ type: 'error', message });
+    },
+  });
+
+  const deleteClientMutation = useMutation({
+    mutationFn: (assignmentId) => deleteClient(assignmentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      setFeedback({ type: 'success', message: 'Cliente removido da carteira.' });
+    },
+    onError: (error) => {
+      const message = error?.response?.data?.message ?? 'Não foi possível remover o cliente.';
+      setFeedback({ type: 'error', message });
+    },
+  });
+
+  const transformedClients = useMemo(() => {
+    return clientsQuery.data?.data?.map(transformClient) ?? [];
+  }, [clientsQuery.data]);
+
+  const metrics = useMemo(() => transformMetrics(clientsQuery.data?.metrics), [clientsQuery.data?.metrics]);
+
+  const handleClientAction = async (action, client) => {
     switch (action) {
       case 'add':
         setShowAddModal(true);
         break;
-      case 'view':console.log('Ver perfil do cliente:', client);
-        // Navigate to client profile
+      case 'view':
+        navigate('/perfil-do-personal', { state: { clientId: client?.userId } });
         break;
-      case 'message':console.log('Enviar mensagem para:', client);
-        navigate('/mensagens', { state: { clientId: client?.id } });
+      case 'message':
+        navigate('/chat-communication-hub', { state: { clientId: client?.userId } });
         break;
-      case 'progress':console.log('Ver progresso do cliente:', client);
-        // Navigate to progress page
+      case 'progress':
+        navigate('/workout-session-tracking', { state: { clientId: client?.userId } });
         break;
-      case 'workout':console.log('Criar treino para:', client);
-        navigate('/criar-treinos', { state: { clientId: client?.id } });
+      case 'workout':
+        navigate('/criar-treinos', { state: { clientId: client?.userId } });
         break;
-      case 'assessment':console.log('Agendar avaliação para:', client);
-        // Navigate to assessment scheduling
-        break;
-      case 'edit':console.log('Editar cliente:', client);
-        // Open edit modal
-        break;
-      case 'suspend':console.log('Suspender cliente:', client);
-        // Handle suspension
+      case 'suspend':
+        if (client?.assignmentId) {
+          updateClientMutation.mutate({ assignmentId: client.assignmentId, payload: { status: 'PAUSED' } });
+        }
         break;
       case 'delete':
-        console.log('Remover cliente:', client);
-        // Handle deletion with confirmation
+        if (client?.assignmentId) {
+          deleteClientMutation.mutate(client.assignmentId);
+        }
         break;
       default:
-        console.log('Ação não reconhecida:', action);
+        break;
     }
   };
 
   const handleBulkAction = (action, selectedClientIds) => {
-    const selectedClients = clients?.filter((client) => selectedClientIds?.includes(client?.id));
+    const selectedClients = transformedClients.filter((client) => selectedClientIds.includes(client?.id));
 
     switch (action) {
-      case 'message':console.log('Enviar mensagem em massa para:', selectedClients);
-        navigate('/mensagens', { state: { bulkClients: selectedClientIds } });
+      case 'message':
+        navigate('/chat-communication-hub', { state: { bulkClients: selectedClients.map((client) => client.userId) } });
         break;
       case 'export':
-        console.log('Exportar dados dos clientes:', selectedClients);
-        // Handle export functionality
+        setFeedback({ type: 'info', message: 'Exportação em desenvolvimento.' });
         break;
-      case 'updatePlan':console.log('Atualizar planos dos clientes:', selectedClients);
-        // Handle bulk plan update
+      case 'updatePlan':
+        setFeedback({ type: 'info', message: 'Atualização em massa indisponível no momento.' });
         break;
       default:
-        console.log('Ação em massa não reconhecida:', action);
+        break;
     }
   };
 
   const handleAddClient = async (clientData) => {
-    console.log('Adicionando novo cliente:', clientData);
+    const payload = {
+      name: clientData?.nome,
+      email: clientData?.email,
+      phone: clientData?.telefone,
+      subscriptionPlan: inverseSubscriptionMap[clientData?.planoAssinatura] ?? 'CUSTOM',
+      paymentStatus: inversePaymentMap[clientData?.statusPagamento ?? 'em-dia'] ?? 'ON_TIME',
+      activityLevel: experienceToActivityMap[clientData?.nivelExperiencia] ?? 'MEDIUM',
+      goals: clientData?.objetivos ?? [],
+      experienceLevel: clientData?.nivelExperiencia,
+      gender: clientData?.genero || undefined,
+      notes: clientData?.observacoes || undefined,
+      medicalConditions: clientData?.condicoesMedicas || undefined,
+      dateOfBirth: clientData?.dataNascimento || undefined,
+      sendInvitation: clientData?.enviarConvite,
+    };
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    // Trigger refresh
-    setRefreshTrigger((prev) => prev + 1);
-
-    console.log('Cliente adicionado com sucesso!');
+    await createClientMutation.mutateAsync(payload);
   };
 
-  const handleExportData = () => {
-    console.log('Exportando dados dos clientes...');
-    // Handle export functionality
+  const handleRefresh = () => {
+    clientsQuery.refetch();
   };
 
-  const handleImportData = () => {
-    console.log('Importando dados dos clientes...');
-    // Handle import functionality
-  };
+  const isLoading = clientsQuery.isLoading || clientsQuery.isFetching;
+  const isError = clientsQuery.isError;
 
   return (
-    <div className="bg-background">
+    <div className="bg-background min-h-screen">
       <div className="container mx-auto px-4 py-8 max-w-7xl">
-        {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-foreground mb-2">
-              Gerenciar Alunos
-            </h1>
-            <p className="text-muted-foreground">
-              Gerencie seus clientes, assinaturas e acompanhe o progresso
-            </p>
+            <h1 className="text-3xl font-bold text-foreground mb-2">Gerenciar Alunos</h1>
+            <p className="text-muted-foreground">Gerencie seus clientes, assinaturas e acompanhe o progresso</p>
           </div>
-          
+
           <div className="flex flex-col sm:flex-row gap-3">
-            {/* View Toggle */}
             <div className="flex bg-muted rounded-lg p-1">
               <Button
                 variant={viewMode === 'table' ? 'default' : 'ghost'}
@@ -239,8 +283,8 @@ const GerenciarAlunos = () => {
                 onClick={() => setViewMode('table')}
                 iconName="Table"
                 iconPosition="left"
-                className="rounded-md">
-
+                className="rounded-md"
+              >
                 Tabela
               </Button>
               <Button
@@ -249,106 +293,123 @@ const GerenciarAlunos = () => {
                 onClick={() => setViewMode('metrics')}
                 iconName="BarChart3"
                 iconPosition="left"
-                className="rounded-md">
-
+                className="rounded-md"
+              >
                 Métricas
               </Button>
             </div>
-            
-            {/* Action Buttons */}
+
             <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={handleImportData}
-                iconName="Upload"
-                iconPosition="left">
-
-                Importar
+              <Button variant="outline" onClick={handleRefresh} iconName="RefreshCw" iconPosition="left">
+                Atualizar
               </Button>
-              
-              <Button
-                variant="outline"
-                onClick={handleExportData}
-                iconName="Download"
-                iconPosition="left">
-
-                Exportar
-              </Button>
-              
               <Button
                 variant="default"
                 onClick={() => setShowAddModal(true)}
                 iconName="UserPlus"
-                iconPosition="left">
-
+                iconPosition="left"
+              >
                 Adicionar Cliente
               </Button>
             </div>
           </div>
         </div>
 
-        {/* Content */}
-        <div className="space-y-8">
-          {viewMode === 'metrics' ?
-          <ClientMetricsPanel /> :
+        {feedback && (
+          <div
+            className={`mb-6 rounded-lg border p-4 ${
+              feedback.type === 'error'
+                ? 'border-destructive/40 bg-destructive/10 text-destructive'
+                : feedback.type === 'success'
+                ? 'border-success/40 bg-success/10 text-success'
+                : 'border-muted text-muted-foreground'
+            }`}
+          >
+            {feedback.message}
+          </div>
+        )}
 
-          <ClientsTable
-            clients={clients}
-            onClientAction={handleClientAction}
-            onBulkAction={handleBulkAction} />
+        {isLoading && (
+          <div className="flex items-center justify-center py-16">
+            <Icon name="Loader2" size={32} className="animate-spin text-primary" />
+          </div>
+        )}
 
-          }
-        </div>
+        {isError && (
+          <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-6 text-destructive">
+            Ocorreu um erro ao carregar os dados dos clientes.
+          </div>
+        )}
 
-        {/* Quick Stats Footer */}
-        <div className="mt-12 grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="bg-card border border-border rounded-lg p-6 text-center">
-            <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mx-auto mb-3">
-              <Icon name="Users" size={24} className="text-primary" />
-            </div>
-            <h3 className="text-2xl font-bold text-foreground mb-1">{clients?.length}</h3>
-            <p className="text-sm text-muted-foreground">Total de Clientes</p>
+        {!isLoading && !isError && (
+          <div className="space-y-8">
+            {viewMode === 'metrics' ? (
+              <ClientMetricsPanel metrics={metrics} />
+            ) : (
+              <ClientsTable
+                clients={transformedClients}
+                onClientAction={handleClientAction}
+                onBulkAction={handleBulkAction}
+                searchTerm={searchTerm}
+                onSearchChange={setSearchTerm}
+                filters={filters}
+                onFiltersChange={setFilters}
+              />
+            )}
           </div>
-          
-          <div className="bg-card border border-border rounded-lg p-6 text-center">
-            <div className="w-12 h-12 bg-success/10 rounded-lg flex items-center justify-center mx-auto mb-3">
-              <Icon name="CheckCircle" size={24} className="text-success" />
+        )}
+
+        {!isLoading && !isError && viewMode === 'table' && (
+          <div className="mt-12 grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="bg-card border border-border rounded-lg p-6 text-center">
+              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mx-auto mb-3">
+                <Icon name="Users" size={24} className="text-primary" />
+              </div>
+              <h3 className="text-2xl font-bold text-foreground mb-1">{transformedClients.length}</h3>
+              <p className="text-sm text-muted-foreground">Total de Clientes (página)</p>
             </div>
-            <h3 className="text-2xl font-bold text-foreground mb-1">
-              {clients?.filter((c) => c?.statusPagamento === 'em-dia')?.length}
-            </h3>
-            <p className="text-sm text-muted-foreground">Pagamentos em Dia</p>
-          </div>
-          
-          <div className="bg-card border border-border rounded-lg p-6 text-center">
-            <div className="w-12 h-12 bg-accent/10 rounded-lg flex items-center justify-center mx-auto mb-3">
-              <Icon name="TrendingUp" size={24} className="text-accent" />
+
+            <div className="bg-card border border-border rounded-lg p-6 text-center">
+              <div className="w-12 h-12 bg-success/10 rounded-lg flex items-center justify-center mx-auto mb-3">
+                <Icon name="CheckCircle" size={24} className="text-success" />
+              </div>
+              <h3 className="text-2xl font-bold text-foreground mb-1">
+                {transformedClients.filter((c) => c?.statusPagamento === 'em-dia').length}
+              </h3>
+              <p className="text-sm text-muted-foreground">Pagamentos em Dia</p>
             </div>
-            <h3 className="text-2xl font-bold text-foreground mb-1">
-              {clients?.filter((c) => c?.nivelAtividade === 'alto')?.length}
-            </h3>
-            <p className="text-sm text-muted-foreground">Alta Atividade</p>
-          </div>
-          
-          <div className="bg-card border border-border rounded-lg p-6 text-center">
-            <div className="w-12 h-12 bg-warning/10 rounded-lg flex items-center justify-center mx-auto mb-3">
-              <Icon name="AlertTriangle" size={24} className="text-warning" />
+
+            <div className="bg-card border border-border rounded-lg p-6 text-center">
+              <div className="w-12 h-12 bg-accent/10 rounded-lg flex items-center justify-center mx-auto mb-3">
+                <Icon name="TrendingUp" size={24} className="text-accent" />
+              </div>
+              <h3 className="text-2xl font-bold text-foreground mb-1">
+                {transformedClients.filter((c) => c?.nivelAtividade === 'alto').length}
+              </h3>
+              <p className="text-sm text-muted-foreground">Alta Atividade</p>
             </div>
-            <h3 className="text-2xl font-bold text-foreground mb-1">
-              {clients?.filter((c) => c?.statusPagamento === 'pendente' || c?.statusPagamento === 'atrasado')?.length}
-            </h3>
-            <p className="text-sm text-muted-foreground">Requer Atenção</p>
+
+            <div className="bg-card border border-border rounded-lg p-6 text-center">
+              <div className="w-12 h-12 bg-warning/10 rounded-lg flex items-center justify-center mx-auto mb-3">
+                <Icon name="AlertTriangle" size={24} className="text-warning" />
+              </div>
+              <h3 className="text-2xl font-bold text-foreground mb-1">
+                {transformedClients.filter((c) => ['pendente', 'atrasado'].includes(c?.statusPagamento)).length}
+              </h3>
+              <p className="text-sm text-muted-foreground">Requer Atenção</p>
+            </div>
           </div>
-        </div>
+        )}
       </div>
-      {/* Add Client Modal */}
+
       <AddClientModal
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
-        onSubmit={handleAddClient} />
-
-    </div>);
-
+        onSubmit={handleAddClient}
+        isSubmitting={createClientMutation.isPending}
+      />
+    </div>
+  );
 };
 
 export default GerenciarAlunos;

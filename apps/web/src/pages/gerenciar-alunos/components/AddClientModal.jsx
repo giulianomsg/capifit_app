@@ -5,11 +5,12 @@ import Input from '../../../components/ui/Input';
 import Select from '../../../components/ui/Select';
 import { Checkbox } from '../../../components/ui/Checkbox';
 
-const AddClientModal = ({ 
-  isOpen = false, 
-  onClose = null, 
+const AddClientModal = ({
+  isOpen = false,
+  onClose = null,
   onSubmit = null,
-  className = "" 
+  isSubmitting = false,
+  className = '',
 }) => {
   const [formData, setFormData] = useState({
     nome: '',
@@ -17,110 +18,111 @@ const AddClientModal = ({
     telefone: '',
     dataNascimento: '',
     genero: '',
-    planoAssinatura: '',
+    planoAssinatura: 'mensal',
+    statusPagamento: 'em-dia',
     objetivos: [],
     nivelExperiencia: '',
     condicoesMedicas: '',
     observacoes: '',
-    enviarConvite: true
+    enviarConvite: true,
   });
 
   const [errors, setErrors] = useState({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleInputChange = (field, value) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [field]: value
+      [field]: value,
     }));
-    
-    // Clear error when user starts typing
+
     if (errors?.[field]) {
-      setErrors(prev => ({
+      setErrors((prev) => ({
         ...prev,
-        [field]: ''
+        [field]: '',
       }));
     }
   };
 
   const handleObjectivesChange = (objective, checked) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      objetivos: checked 
+      objetivos: checked
         ? [...prev?.objetivos, objective]
-        : prev?.objetivos?.filter(obj => obj !== objective)
+        : prev?.objetivos?.filter((obj) => obj !== objective),
     }));
   };
 
   const validateForm = () => {
     const newErrors = {};
-    
+
     if (!formData?.nome?.trim()) {
       newErrors.nome = 'Nome é obrigatório';
     }
-    
+
     if (!formData?.email?.trim()) {
       newErrors.email = 'Email é obrigatório';
-    } else if (!/\S+@\S+\.\S+/?.test(formData?.email)) {
+    } else if (!/\S+@\S+\.\S+/.test(formData?.email)) {
       newErrors.email = 'Email inválido';
     }
-    
+
     if (!formData?.telefone?.trim()) {
       newErrors.telefone = 'Telefone é obrigatório';
     }
-    
+
     if (!formData?.planoAssinatura) {
       newErrors.planoAssinatura = 'Selecione um plano';
     }
-    
+
+    if (!formData?.statusPagamento) {
+      newErrors.statusPagamento = 'Selecione o status de pagamento';
+    }
+
     if (!formData?.nivelExperiencia) {
       newErrors.nivelExperiencia = 'Selecione o nível de experiência';
     }
 
     setErrors(newErrors);
-    return Object.keys(newErrors)?.length === 0;
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e) => {
     e?.preventDefault();
-    
+
     if (!validateForm()) {
       return;
     }
 
-    setIsSubmitting(true);
-    
     try {
       if (onSubmit) {
         await onSubmit(formData);
       }
-      
-      // Reset form
+
       setFormData({
         nome: '',
         email: '',
         telefone: '',
         dataNascimento: '',
         genero: '',
-        planoAssinatura: '',
+        planoAssinatura: 'mensal',
+        statusPagamento: 'em-dia',
         objetivos: [],
         nivelExperiencia: '',
         condicoesMedicas: '',
         observacoes: '',
-        enviarConvite: true
+        enviarConvite: true,
       });
-      
+      setErrors({});
+
       if (onClose) {
         onClose();
       }
     } catch (error) {
       console.error('Erro ao adicionar cliente:', error);
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
   const handleClose = () => {
+    if (isSubmitting) return;
     if (onClose) {
       onClose();
     }
@@ -130,19 +132,26 @@ const AddClientModal = ({
     { value: 'masculino', label: 'Masculino' },
     { value: 'feminino', label: 'Feminino' },
     { value: 'outro', label: 'Outro' },
-    { value: 'nao-informar', label: 'Prefiro não informar' }
+    { value: 'nao-informar', label: 'Prefiro não informar' },
   ];
 
   const planoOptions = [
     { value: 'mensal', label: 'Mensal - R$ 149,90' },
     { value: 'trimestral', label: 'Trimestral - R$ 399,90' },
-    { value: 'anual', label: 'Anual - R$ 1.499,90' }
+    { value: 'anual', label: 'Anual - R$ 1.499,90' },
+    { value: 'personalizado', label: 'Plano Personalizado' },
+  ];
+
+  const statusPagamentoOptions = [
+    { value: 'em-dia', label: 'Pagamento em dia' },
+    { value: 'pendente', label: 'Pagamento pendente' },
+    { value: 'atrasado', label: 'Pagamento atrasado' },
   ];
 
   const nivelExperienciaOptions = [
     { value: 'iniciante', label: 'Iniciante' },
     { value: 'intermediario', label: 'Intermediário' },
-    { value: 'avancado', label: 'Avançado' }
+    { value: 'avancado', label: 'Avançado' },
   ];
 
   const objetivosDisponiveis = [
@@ -151,24 +160,17 @@ const AddClientModal = ({
     'Melhora do condicionamento',
     'Reabilitação',
     'Manutenção da saúde',
-    'Preparação para competição'
+    'Preparação para competição',
   ];
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div 
-        className="absolute inset-0 bg-black/50"
-        onClick={handleClose}
-      />
-      {/* Modal */}
-      <div className={`
-        relative bg-card border border-border rounded-lg shadow-lg w-full max-w-2xl max-h-[90vh] overflow-hidden
-        ${className}
-      `}>
-        {/* Header */}
+      <div className="absolute inset-0 bg-black/50" onClick={handleClose} />
+      <div
+        className={`relative bg-card border border-border rounded-lg shadow-lg w-full max-w-2xl max-h-[90vh] overflow-hidden ${className}`}
+      >
         <div className="flex items-center justify-between p-6 border-b border-border">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
@@ -179,23 +181,17 @@ const AddClientModal = ({
               <p className="text-sm text-muted-foreground">Preencha os dados do cliente</p>
             </div>
           </div>
-          
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleClose}
-          >
+
+          <Button variant="ghost" size="icon" onClick={handleClose} disabled={isSubmitting}>
             <Icon name="X" size={20} />
           </Button>
         </div>
 
-        {/* Content */}
         <div className="overflow-y-auto max-h-[calc(90vh-140px)]">
           <form onSubmit={handleSubmit} className="p-6 space-y-6">
-            {/* Personal Information */}
             <div>
               <h3 className="text-lg font-medium text-foreground mb-4">Informações Pessoais</h3>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Input
                   label="Nome Completo"
@@ -206,7 +202,7 @@ const AddClientModal = ({
                   error={errors?.nome}
                   required
                 />
-                
+
                 <Input
                   label="Email"
                   type="email"
@@ -216,7 +212,7 @@ const AddClientModal = ({
                   error={errors?.email}
                   required
                 />
-                
+
                 <Input
                   label="Telefone"
                   type="tel"
@@ -226,14 +222,14 @@ const AddClientModal = ({
                   error={errors?.telefone}
                   required
                 />
-                
+
                 <Input
                   label="Data de Nascimento"
                   type="date"
                   value={formData?.dataNascimento}
                   onChange={(e) => handleInputChange('dataNascimento', e?.target?.value)}
                 />
-                
+
                 <Select
                   label="Gênero"
                   options={generoOptions}
@@ -244,25 +240,35 @@ const AddClientModal = ({
               </div>
             </div>
 
-            {/* Subscription Plan */}
             <div>
               <h3 className="text-lg font-medium text-foreground mb-4">Plano de Assinatura</h3>
-              
-              <Select
-                label="Plano"
-                options={planoOptions}
-                value={formData?.planoAssinatura}
-                onChange={(value) => handleInputChange('planoAssinatura', value)}
-                error={errors?.planoAssinatura}
-                placeholder="Selecione um plano"
-                required
-              />
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Select
+                  label="Plano"
+                  options={planoOptions}
+                  value={formData?.planoAssinatura}
+                  onChange={(value) => handleInputChange('planoAssinatura', value)}
+                  error={errors?.planoAssinatura}
+                  placeholder="Selecione um plano"
+                  required
+                />
+
+                <Select
+                  label="Status de Pagamento"
+                  options={statusPagamentoOptions}
+                  value={formData?.statusPagamento}
+                  onChange={(value) => handleInputChange('statusPagamento', value)}
+                  error={errors?.statusPagamento}
+                  placeholder="Selecione o status"
+                  required
+                />
+              </div>
             </div>
 
-            {/* Fitness Information */}
             <div>
               <h3 className="text-lg font-medium text-foreground mb-4">Informações de Treino</h3>
-              
+
               <div className="space-y-4">
                 <Select
                   label="Nível de Experiência"
@@ -273,13 +279,11 @@ const AddClientModal = ({
                   placeholder="Selecione o nível"
                   required
                 />
-                
+
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-3">
-                    Objetivos
-                  </label>
+                  <label className="block text-sm font-medium text-foreground mb-3">Objetivos</label>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {objetivosDisponiveis?.map((objetivo) => (
+                    {objetivosDisponiveis.map((objetivo) => (
                       <Checkbox
                         key={objetivo}
                         label={objetivo}
@@ -289,7 +293,7 @@ const AddClientModal = ({
                     ))}
                   </div>
                 </div>
-                
+
                 <Input
                   label="Condições Médicas"
                   type="text"
@@ -298,7 +302,7 @@ const AddClientModal = ({
                   onChange={(e) => handleInputChange('condicoesMedicas', e?.target?.value)}
                   description="Informações importantes para o treino"
                 />
-                
+
                 <Input
                   label="Observações"
                   type="text"
@@ -309,7 +313,6 @@ const AddClientModal = ({
               </div>
             </div>
 
-            {/* Options */}
             <div>
               <Checkbox
                 label="Enviar convite por email"
@@ -321,16 +324,11 @@ const AddClientModal = ({
           </form>
         </div>
 
-        {/* Footer */}
         <div className="flex items-center justify-end space-x-3 p-6 border-t border-border bg-muted/30">
-          <Button
-            variant="outline"
-            onClick={handleClose}
-            disabled={isSubmitting}
-          >
+          <Button variant="outline" onClick={handleClose} disabled={isSubmitting}>
             Cancelar
           </Button>
-          
+
           <Button
             variant="default"
             onClick={handleSubmit}
