@@ -41,8 +41,8 @@
     "cors": "^2.8.5",
     "d3": "^7.9.0",
     "date-fns": "^4.1.0",
-    "dotenv": "^16.0.1",
-    "express": "^5.1.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
     "express-rate-limit": "^8.1.0",
     "framer-motion": "^10.16.4",
     "jsonwebtoken": "^9.0.2",
@@ -60,7 +60,8 @@
     "tailwind-merge": "^3.3.1",
     "tailwindcss-animate": "^1.0.7",
     "tailwindcss-elevation": "^2.0.0",
-    "tailwindcss-fluid-type": "^2.0.7"
+    "tailwindcss-fluid-type": "^2.0.7",
+    "socket.io": "^4.7.5"
   },
   "scripts": {
     "start": "vite",
