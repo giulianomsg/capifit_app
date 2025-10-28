@@ -1,14 +1,28 @@
-import React, { useState } from 'react';
-import { PlusCircle, Search, Filter, Download } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Download, Filter, Loader2, PlusCircle, Search } from 'lucide-react';
+
 import Button from '../../components/ui/Button';
 import Header from '../../components/ui/Header';
 import Sidebar from '../../components/ui/Sidebar';
-import NutritionStatsCards from './components/NutritionStatsCards';
+import {
+  getNutritionAnalytics,
+  getNutritionOverview,
+  listNutritionPlans,
+} from '../../services/nutritionService';
 import ActivePlansTable from './components/ActivePlansTable';
-import NutritionAnalytics from './components/NutritionAnalytics';
-import QuickActionCards from './components/QuickActionCards';
 import FoodSearchPanel from './components/FoodSearchPanel';
 import NotificationAlert from './components/NotificationAlert';
+import NutritionAnalytics from './components/NutritionAnalytics';
+import NutritionStatsCards from './components/NutritionStatsCards';
+import QuickActionCards from './components/QuickActionCards';
+
+const statusFilters = [
+  { value: 'all', label: 'Todos os status' },
+  { value: 'active', label: 'Ativos' },
+  { value: 'excellent', label: 'Excelentes' },
+  { value: 'needs_attention', label: 'Precisam atenção' },
+];
 
 const NutritionManagement = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -16,188 +30,148 @@ const NutritionManagement = () => {
   const [showNotifications, setShowNotifications] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  // Mock data for active nutrition plans
-  const activePlans = [
-    {
-      id: 1,
-      clientName: 'Maria Silva',
-      planType: 'Perda de Peso',
-      caloriesTarget: 1800,
-      startDate: '2024-10-01',
-      compliance: 85,
-      status: 'active',
-      lastUpdate: '2024-10-26'
-    },
-    {
-      id: 2,
-      clientName: 'João Santos',
-      planType: 'Ganho de Massa',
-      caloriesTarget: 2500,
-      startDate: '2024-10-15',
-      compliance: 92,
-      status: 'active',
-      lastUpdate: '2024-10-27'
-    },
-    {
-      id: 3,
-      clientName: 'Ana Costa',
-      planType: 'Manutenção',
-      caloriesTarget: 2000,
-      startDate: '2024-09-20',
-      compliance: 78,
-      status: 'needs_attention',
-      lastUpdate: '2024-10-25'
-    },
-    {
-      id: 4,
-      clientName: 'Pedro Oliveira',
-      planType: 'Cutting',
-      caloriesTarget: 1600,
-      startDate: '2024-10-10',
-      compliance: 95,
-      status: 'excellent',
-      lastUpdate: '2024-10-27'
-    }
-  ];
-
-  // Mock analytics data
-  const analyticsData = {
-    averageAdherence: 87.5,
-    mostUsedFoods: [
-      { name: 'Peito de Frango', usage: 45 },
-      { name: 'Arroz Integral', usage: 38 },
-      { name: 'Batata Doce', usage: 32 },
-      { name: 'Ovos', usage: 29 },
-      { name: 'Brócolis', usage: 25 }
-    ],
-    macroDistribution: {
-      proteins: 30,
-      carbs: 45,
-      fats: 25
-    },
-    weeklyProgress: [
-      { day: 'Seg', adherence: 85 },
-      { day: 'Ter', adherence: 90 },
-      { day: 'Qua', adherence: 88 },
-      { day: 'Qui', adherence: 92 },
-      { day: 'Sex', adherence: 87 },
-      { day: 'Sáb', adherence: 80 },
-      { day: 'Dom', adherence: 85 }
-    ]
-  };
-
-  const filteredPlans = activePlans?.filter(plan => {
-    const matchesSearch = plan?.clientName?.toLowerCase()?.includes(searchTerm?.toLowerCase()) ||
-                         plan?.planType?.toLowerCase()?.includes(searchTerm?.toLowerCase());
-    
-    if (filterType === 'all') return matchesSearch;
-    if (filterType === 'active') return matchesSearch && plan?.status === 'active';
-    if (filterType === 'needs_attention') return matchesSearch && plan?.status === 'needs_attention';
-    if (filterType === 'excellent') return matchesSearch && plan?.status === 'excellent';
-    
-    return matchesSearch;
+  const overviewQuery = useQuery({
+    queryKey: ['nutrition', 'overview'],
+    queryFn: () => getNutritionOverview(),
   });
+
+  const plansQuery = useQuery({
+    queryKey: ['nutrition', 'plans'],
+    queryFn: () => listNutritionPlans(),
+  });
+
+  const analyticsQuery = useQuery({
+    queryKey: ['nutrition', 'analytics'],
+    queryFn: () => getNutritionAnalytics(),
+  });
+
+  const plans = plansQuery.data ?? [];
+
+  const filteredPlans = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+
+    return plans.filter((plan) => {
+      const matchesSearch =
+        !normalizedSearch ||
+        plan.clientName?.toLowerCase().includes(normalizedSearch) ||
+        plan.title?.toLowerCase().includes(normalizedSearch);
+
+      if (filterType === 'all') {
+        return matchesSearch;
+      }
+
+      return matchesSearch && plan.status === filterType;
+    });
+  }, [plans, filterType, searchTerm]);
+
+  const isLoading = overviewQuery.isLoading || plansQuery.isLoading || analyticsQuery.isLoading;
+  const hasError = overviewQuery.isError || plansQuery.isError || analyticsQuery.isError;
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Header onMenuToggle={() => setIsSidebarOpen(!isSidebarOpen)} />
       <div className="flex">
         <Sidebar onClose={() => setIsSidebarOpen(false)} />
-        
+
         <main className="flex-1 p-6">
-          {/* Page Header */}
+          {hasError && (
+            <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-600">
+              Ocorreu um erro ao carregar os dados de nutrição. Tente novamente mais tarde.
+            </div>
+          )}
+
           <div className="mb-8">
-            <div className="flex justify-between items-start mb-6">
+            <div className="mb-6 flex items-start justify-between gap-4">
               <div>
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                  Gestão de Nutrição
-                </h1>
+                <h1 className="mb-2 text-3xl font-bold text-gray-900">Gestão de Nutrição</h1>
                 <p className="text-gray-600">
                   Gerencie planos alimentares e monitore o progresso nutricional dos seus clientes
                 </p>
               </div>
-              
+
               <div className="flex gap-3">
                 <Button variant="outline" className="flex items-center gap-2">
-                  <Download className="w-4 h-4" />
+                  <Download className="h-4 w-4" />
                   Exportar Relatório
                 </Button>
                 <Button className="flex items-center gap-2 bg-green-600 hover:bg-green-700">
-                  <PlusCircle className="w-4 h-4" />
+                  <PlusCircle className="h-4 w-4" />
                   Criar Plano Alimentar
                 </Button>
               </div>
             </div>
 
-            {/* Notifications */}
-            {showNotifications && (
-              <NotificationAlert onClose={() => setShowNotifications(false)} />
-            )}
+            {showNotifications && <NotificationAlert onClose={() => setShowNotifications(false)} />}
           </div>
 
-          {/* Quick Action Cards */}
           <div className="mb-8">
             <QuickActionCards />
           </div>
 
-          {/* Stats Cards */}
           <div className="mb-8">
-            <NutritionStatsCards plans={activePlans} />
+            {isLoading ? (
+              <div className="flex items-center justify-center rounded-xl border border-gray-200 bg-white p-10 text-sm text-gray-500">
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Carregando métricas nutricionais...
+              </div>
+            ) : (
+              <NutritionStatsCards stats={overviewQuery.data?.stats} />
+            )}
           </div>
 
-          <div className="grid lg:grid-cols-3 gap-8">
-            {/* Main Content Area - Active Plans */}
+          <div className="grid gap-8 lg:grid-cols-3">
             <div className="lg:col-span-2">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-                <div className="p-6 border-b border-gray-200">
-                  <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-semibold text-gray-900">
-                      Planos Ativos
-                    </h2>
+              <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+                <div className="border-b border-gray-200 p-6">
+                  <div className="mb-4 flex items-center justify-between">
+                    <h2 className="text-xl font-semibold text-gray-900">Planos Ativos</h2>
                     <div className="flex gap-2">
                       <Button variant="outline" size="sm" className="flex items-center gap-2">
-                        <Filter className="w-4 h-4" />
+                        <Filter className="h-4 w-4" />
                         Filtros
                       </Button>
                     </div>
                   </div>
 
-                  {/* Search and Filter Controls */}
-                  <div className="flex gap-4 mb-4">
-                    <div className="flex-1 relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div className="relative w-full md:max-w-sm">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                       <input
                         type="text"
-                        placeholder="Buscar por cliente ou tipo de plano..."
+                        placeholder="Buscar por cliente ou título do plano"
                         value={searchTerm}
-                        onChange={(e) => setSearchTerm(e?.target?.value)}
-                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        onChange={(event) => setSearchTerm(event.target.value)}
+                        className="w-full rounded-lg border border-gray-300 px-10 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-green-500"
                       />
                     </div>
+
                     <select
                       value={filterType}
-                      onChange={(e) => setFilterType(e?.target?.value)}
-                      className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      onChange={(event) => setFilterType(event.target.value)}
+                      className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-green-500"
                     >
-                      <option value="all">Todos os Status</option>
-                      <option value="active">Ativo</option>
-                      <option value="excellent">Excelente</option>
-                      <option value="needs_attention">Precisa Atenção</option>
+                      {statusFilters.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>
 
-                {/* Active Plans Table */}
-                <ActivePlansTable plans={filteredPlans} />
+                <div className="p-6">
+                  {plansQuery.isLoading ? (
+                    <div className="flex items-center justify-center py-12 text-sm text-gray-500">
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Carregando planos alimentares...
+                    </div>
+                  ) : (
+                    <ActivePlansTable plans={filteredPlans} />
+                  )}
+                </div>
               </div>
             </div>
 
-            {/* Sidebar Content */}
-            <div className="space-y-6">
-              {/* Nutrition Analytics */}
-              <NutritionAnalytics data={analyticsData} />
-
-              {/* Food Search Panel */}
+            <div className="space-y-8">
+              <NutritionAnalytics data={analyticsQuery.data} isLoading={analyticsQuery.isLoading} />
               <FoodSearchPanel />
             </div>
           </div>

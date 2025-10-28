@@ -21,11 +21,18 @@ const baseDir = (() => {
   throw createHttpError(500, 'S3 storage driver is not implemented yet');
 })();
 
-const avatarDir = path.join(baseDir, 'avatars');
+const directories = {
+  avatars: path.join(baseDir, 'avatars'),
+  progressPhotos: path.join(baseDir, 'progress-photos'),
+  assessmentDocs: path.join(baseDir, 'assessment-docs'),
+  nutritionDocs: path.join(baseDir, 'nutrition-docs'),
+};
 
 async function ensureDirectories() {
   await fs.mkdir(baseDir, { recursive: true });
-  await fs.mkdir(avatarDir, { recursive: true });
+  for (const dir of Object.values(directories)) {
+    await fs.mkdir(dir, { recursive: true });
+  }
 }
 
 void ensureDirectories();
@@ -44,11 +51,23 @@ function resolveAbsolutePath(relativePath: string) {
   return path.join(baseDir, sanitized);
 }
 
+function relativeFromFile(filePath: string) {
+  const relative = path.relative(baseDir, filePath);
+  return normalizeRelativePath(relative);
+}
+
+function generateFilename(originalName: string) {
+  const extension = path.extname(originalName) || '.bin';
+  return `${Date.now()}-${randomUUID()}${extension.toLowerCase()}`;
+}
+
 export const storage = {
   baseDir,
-  avatarDir,
+  directories,
   buildPublicUrl,
   resolveAbsolutePath,
+  relativeFromFile,
+  generateFilename,
   async removeFile(relativePath: string | null | undefined) {
     if (!relativePath) {
       return;
@@ -63,14 +82,7 @@ export const storage = {
       }
     }
   },
-  relativeFromFile(filePath: string) {
-    const relative = path.relative(baseDir, filePath);
-    return normalizeRelativePath(relative);
-  },
-  generateFilename(originalName: string) {
-    const extension = path.extname(originalName) || '.bin';
-    return `${Date.now()}-${randomUUID()}${extension.toLowerCase()}`;
-  },
 };
 
+export type StorageDirectories = typeof directories;
 export type StorageConfig = typeof storage;

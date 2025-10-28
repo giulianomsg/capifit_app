@@ -1,117 +1,110 @@
-import React from 'react';
-import { TrendingUp, Utensils } from 'lucide-react';
+import React, { useMemo } from 'react';
+import { Loader2, TrendingUp, Utensils } from 'lucide-react';
 
-const NutritionAnalytics = ({ data }) => {
-  const { averageAdherence, mostUsedFoods, macroDistribution, weeklyProgress } = data || {};
+const weekdayLabels = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+const NutritionAnalytics = ({ data, isLoading }) => {
+  const analytics = data ?? {};
+
+  const weeklyProgress = useMemo(() => {
+    return (analytics.weeklyProgress ?? []).map((item) => ({
+      label: typeof item.day === 'number' ? weekdayLabels[item.day] ?? `Dia ${item.day}` : item.day,
+      adherence: item.adherence ?? 0,
+    }));
+  }, [analytics.weeklyProgress]);
+
+  const mostUsedFoods = analytics.mostUsedFoods ?? [];
+  const macroDistribution = analytics.macroDistribution ?? {};
+  const averageAdherence = analytics.averageAdherence ?? 0;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center rounded-xl border border-gray-200 bg-white p-10 text-sm text-gray-500">
+        <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Carregando análises nutricionais...
+      </div>
+    );
+  }
+
+  if (!mostUsedFoods.length && !weeklyProgress.length) {
+    return (
+      <div className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500">
+        Nenhum dado nutricional disponível até o momento.
+      </div>
+    );
+  }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
-        <TrendingUp className="w-5 h-5 text-green-600" />
+    <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+      <h3 className="mb-6 flex items-center gap-2 text-lg font-semibold text-gray-900">
+        <TrendingUp className="h-5 w-5 text-green-600" />
         Análises Nutricionais
       </h3>
-      {/* Average Adherence */}
+
       <div className="mb-6">
-        <div className="flex justify-between items-center mb-2">
-          <span className="text-sm font-medium text-gray-700">Aderência Média dos Clientes</span>
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-sm font-medium text-gray-700">Aderência média dos clientes</span>
           <span className="text-2xl font-bold text-green-600">{averageAdherence}%</span>
         </div>
-        <div className="w-full bg-gray-200 rounded-full h-2">
+        <div className="h-2 w-full rounded-full bg-gray-200">
           <div
-            className="bg-green-500 h-2 rounded-full"
-            style={{ width: `${averageAdherence}%` }}
+            className="h-2 rounded-full bg-green-500"
+            style={{ width: `${Math.min(100, Math.max(0, averageAdherence))}%` }}
           />
         </div>
       </div>
-      {/* Most Used Foods */}
+
       <div className="mb-6">
-        <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-          <Utensils className="w-4 h-4" />
-          Alimentos Mais Utilizados
+        <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900">
+          <Utensils className="h-4 w-4" />
+          Alimentos mais utilizados
         </h4>
         <div className="space-y-2">
-          {mostUsedFoods?.map((food, index) => (
-            <div key={index} className="flex justify-between items-center">
-              <span className="text-sm text-gray-700">{food?.name}</span>
+          {mostUsedFoods.map((food) => (
+            <div key={food.id ?? food.name} className="flex items-center justify-between">
+              <span className="text-sm text-gray-700">{food.name}</span>
               <div className="flex items-center gap-2">
-                <div className="w-16 bg-gray-200 rounded-full h-1.5">
+                <div className="h-1.5 w-16 rounded-full bg-gray-200">
                   <div
-                    className="bg-green-500 h-1.5 rounded-full"
-                    style={{ width: `${(food?.usage / 50) * 100}%` }}
+                    className="h-1.5 rounded-full bg-green-500"
+                    style={{ width: `${Math.min(100, (food.usage / Math.max(1, mostUsedFoods[0]?.usage ?? 1)) * 100)}%` }}
                   />
                 </div>
-                <span className="text-xs text-gray-500 w-8">{food?.usage}</span>
+                <span className="w-8 text-xs text-gray-500">{food.usage}</span>
               </div>
             </div>
           ))}
+          {!mostUsedFoods.length && <p className="text-xs text-gray-500">Sem registros de alimentos vinculados aos planos.</p>}
         </div>
       </div>
-      {/* Macro Distribution */}
-      <div className="mb-6">
-        <h4 className="text-sm font-semibold text-gray-900 mb-3">
-          Distribuição de Macronutrientes
-        </h4>
-        <div className="space-y-3">
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-gray-700">Proteínas</span>
+
+      <div className="mb-6 space-y-3">
+        <h4 className="text-sm font-semibold text-gray-900">Distribuição de macronutrientes</h4>
+        {[{ key: 'proteins', label: 'Proteínas', color: 'bg-red-500' }, { key: 'carbs', label: 'Carboidratos', color: 'bg-blue-500' }, { key: 'fats', label: 'Gorduras', color: 'bg-yellow-500' }].map((macro) => (
+          <div key={macro.key} className="flex items-center justify-between">
+            <span className="text-sm text-gray-700">{macro.label}</span>
             <div className="flex items-center gap-2">
-              <div className="w-20 bg-gray-200 rounded-full h-2">
+              <div className="h-2 w-20 rounded-full bg-gray-200">
                 <div
-                  className="bg-red-500 h-2 rounded-full"
-                  style={{ width: `${(macroDistribution?.proteins / 50) * 100}%` }}
+                  className={`h-2 rounded-full ${macro.color}`}
+                  style={{ width: `${Math.min(100, Math.max(0, macroDistribution[macro.key] ?? 0))}%` }}
                 />
               </div>
-              <span className="text-sm font-medium text-gray-900 w-8">
-                {macroDistribution?.proteins}%
-              </span>
+              <span className="w-10 text-sm font-medium text-gray-900">{macroDistribution[macro.key] ?? 0}%</span>
             </div>
           </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-gray-700">Carboidratos</span>
-            <div className="flex items-center gap-2">
-              <div className="w-20 bg-gray-200 rounded-full h-2">
-                <div
-                  className="bg-blue-500 h-2 rounded-full"
-                  style={{ width: `${(macroDistribution?.carbs / 50) * 100}%` }}
-                />
-              </div>
-              <span className="text-sm font-medium text-gray-900 w-8">
-                {macroDistribution?.carbs}%
-              </span>
-            </div>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-gray-700">Gorduras</span>
-            <div className="flex items-center gap-2">
-              <div className="w-20 bg-gray-200 rounded-full h-2">
-                <div
-                  className="bg-yellow-500 h-2 rounded-full"
-                  style={{ width: `${(macroDistribution?.fats / 50) * 100}%` }}
-                />
-              </div>
-              <span className="text-sm font-medium text-gray-900 w-8">
-                {macroDistribution?.fats}%
-              </span>
-            </div>
-          </div>
-        </div>
+        ))}
       </div>
-      {/* Weekly Progress */}
+
       <div>
-        <h4 className="text-sm font-semibold text-gray-900 mb-3">
-          Progresso Semanal
-        </h4>
-        <div className="flex justify-between items-end h-16 gap-1">
-          {weeklyProgress?.map((day, index) => (
-            <div key={index} className="flex flex-col items-center flex-1">
+        <h4 className="mb-3 text-sm font-semibold text-gray-900">Progresso semanal</h4>
+        <div className="flex h-16 items-end gap-1">
+          {weeklyProgress.map((day) => (
+            <div key={day.label} className="flex flex-1 flex-col items-center">
               <div
-                className="w-full bg-green-500 rounded-t"
-                style={{
-                  height: `${(day?.adherence / 100) * 50}px`,
-                  minHeight: '8px'
-                }}
+                className="w-full rounded-t bg-green-500"
+                style={{ height: `${(day.adherence / 100) * 50}px`, minHeight: '8px' }}
               />
-              <span className="text-xs text-gray-500 mt-1">{day?.day}</span>
+              <span className="mt-1 text-xs text-gray-500">{day.label}</span>
             </div>
           ))}
         </div>

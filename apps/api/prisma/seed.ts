@@ -2,8 +2,11 @@ import { randomUUID } from 'node:crypto';
 
 import {
   ActivityLevel,
+  AssessmentStatus,
+  AssessmentType,
   ExerciseCategory,
   MuscleGroup,
+  NutritionPlanStatus,
   PaymentStatus,
   PrismaClient,
   SubscriptionPlan,
@@ -86,7 +89,6 @@ async function ensureTrainerWithClients() {
         },
       },
     },
-    include: { roles: true },
   });
 
   console.log(`✅ Trainer user available: ${trainerEmail} / ${trainerPassword}`);
@@ -103,6 +105,8 @@ async function ensureTrainerWithClients() {
       lastWorkoutAt: new Date(),
       nextAssessmentAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       goals: ['Perda de peso', 'Condicionamento'],
+      heightCm: 165,
+      weightKg: 68,
     },
     {
       name: 'Carlos Eduardo Oliveira',
@@ -115,6 +119,8 @@ async function ensureTrainerWithClients() {
       lastWorkoutAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
       nextAssessmentAt: new Date(Date.now() + 12 * 24 * 60 * 60 * 1000),
       goals: ['Ganho de massa muscular'],
+      heightCm: 178,
+      weightKg: 82,
     },
     {
       name: 'Ana Paula Costa',
@@ -127,6 +133,8 @@ async function ensureTrainerWithClients() {
       lastWorkoutAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
       nextAssessmentAt: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000),
       goals: ['Reabilitação'],
+      heightCm: 160,
+      weightKg: 72,
     },
   ];
 
@@ -168,6 +176,8 @@ async function ensureTrainerWithClients() {
         lastWorkoutAt: seed.lastWorkoutAt,
         nextAssessmentAt: seed.nextAssessmentAt,
         goals: seed.goals,
+        heightCm: seed.heightCm,
+        weightKg: seed.weightKg,
       },
       create: {
         id: randomUUID(),
@@ -179,6 +189,8 @@ async function ensureTrainerWithClients() {
         lastWorkoutAt: seed.lastWorkoutAt,
         nextAssessmentAt: seed.nextAssessmentAt,
         goals: seed.goals,
+        heightCm: seed.heightCm,
+        weightKg: seed.weightKg,
       },
     });
 
@@ -203,6 +215,146 @@ async function ensureTrainerWithClients() {
   }
 
   return { trainer, trainerClients };
+}
+
+async function seedAssessmentTemplates(trainerId: string) {
+  const templates = [
+    {
+      name: 'Avaliação Inicial Completa',
+      description: 'Checklist completo com composição corporal e mobilidade.',
+      type: AssessmentType.COMPLETE,
+      isDefault: true,
+      metrics: {
+        measurements: ['weight', 'bodyFat', 'muscleMass', 'waist', 'hip'],
+        tests: ['flexibility', 'vo2max', 'pushups'],
+      },
+    },
+    {
+      name: 'Reavaliação Mensal',
+      description: 'Acompanhamento mensal com foco em progresso geral.',
+      type: AssessmentType.FOLLOW_UP,
+      isDefault: true,
+      metrics: {
+        measurements: ['weight', 'bodyFat', 'chest', 'thigh'],
+        tests: ['plank', 'squat'],
+      },
+    },
+    {
+      name: 'Bioimpedância Corporal',
+      description: 'Protocolo para aferição de bioimpedância segmentar.',
+      type: AssessmentType.BIOIMPEDANCE,
+      isDefault: false,
+      metrics: {
+        measurements: ['weight', 'bodyFat', 'visceralFat'],
+      },
+    },
+  ];
+
+  for (const template of templates) {
+    await prisma.assessmentTemplate.upsert({
+      where: { name: template.name },
+      update: {
+        description: template.description,
+        type: template.type,
+        metrics: template.metrics,
+        isDefault: template.isDefault,
+        trainerId: template.isDefault ? null : trainerId,
+      },
+      create: {
+        id: randomUUID(),
+        name: template.name,
+        description: template.description,
+        type: template.type,
+        metrics: template.metrics,
+        isDefault: template.isDefault,
+        trainerId: template.isDefault ? null : trainerId,
+      },
+    });
+  }
+}
+
+async function seedAssessments(trainerId: string, clientIds: string[]) {
+  if (!clientIds.length) {
+    return;
+  }
+
+  const defaultTemplate = await prisma.assessmentTemplate.findFirst({ where: { isDefault: true } });
+  const [firstClient, secondClient] = clientIds;
+
+  if (firstClient) {
+    const existing = await prisma.assessment.findFirst({
+      where: {
+        trainerId,
+        clientId: firstClient,
+        status: AssessmentStatus.COMPLETED,
+      },
+    });
+
+    if (!existing) {
+      const assessment = await prisma.assessment.create({
+        data: {
+          id: randomUUID(),
+          trainerId,
+          clientId: firstClient,
+          templateId: defaultTemplate?.id,
+          status: AssessmentStatus.COMPLETED,
+          type: AssessmentType.COMPLETE,
+          scheduledFor: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+          performedAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000),
+          notes: 'Cliente demonstrou excelente evolução e melhora na postura.',
+          metrics: {
+            weightKg: 66,
+            bodyFat: 22,
+            muscleMass: 28,
+            flexibility: 'Boa',
+          },
+        },
+      });
+
+      await prisma.measurementRecord.create({
+        data: {
+          id: randomUUID(),
+          trainerId,
+          clientId: firstClient,
+          assessmentId: assessment.id,
+          recordedAt: assessment.performedAt ?? new Date(),
+          weightKg: 66,
+          heightCm: 165,
+          bodyFat: 22,
+          muscleMass: 28,
+          waist: 72,
+          hip: 98,
+          notes: 'Mantém boa adesão ao plano alimentar.',
+          data: { bmi: 24.2 },
+        },
+      });
+    }
+  }
+
+  if (secondClient) {
+    const scheduled = await prisma.assessment.findFirst({
+      where: {
+        trainerId,
+        clientId: secondClient,
+        status: AssessmentStatus.SCHEDULED,
+      },
+    });
+
+    if (!scheduled) {
+      await prisma.assessment.create({
+        data: {
+          id: randomUUID(),
+          trainerId,
+          clientId: secondClient,
+          templateId: defaultTemplate?.id,
+          status: AssessmentStatus.SCHEDULED,
+          type: AssessmentType.FOLLOW_UP,
+          scheduledFor: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
+          notes: 'Revisar mobilidade e carga de treino.',
+        },
+      });
+    }
+  }
 }
 
 async function seedExercises(trainerId: string) {
@@ -377,12 +529,206 @@ async function seedWorkouts(trainerId: string, clientIds: string[]) {
   });
 }
 
+async function seedFoodDatabase(trainerId: string) {
+  const foods = [
+    {
+      name: 'Arroz branco cozido',
+      slug: 'arroz-branco-cozido',
+      category: 'cereais',
+      servingSize: 100,
+      calories: 128,
+      protein: 2.6,
+      carbs: 26.2,
+      fat: 0.2,
+      fiber: 0.4,
+      origin: 'taco',
+    },
+    {
+      name: 'Feijão preto cozido',
+      slug: 'feijao-preto-cozido',
+      category: 'leguminosas',
+      servingSize: 100,
+      calories: 77,
+      protein: 4.5,
+      carbs: 14.0,
+      fat: 0.5,
+      fiber: 8.4,
+      origin: 'taco',
+    },
+    {
+      name: 'Peito de frango grelhado',
+      slug: 'peito-frango-grelhado',
+      category: 'carnes',
+      servingSize: 100,
+      calories: 165,
+      protein: 31.0,
+      carbs: 0,
+      fat: 3.6,
+      fiber: 0,
+      origin: 'taco',
+    },
+    {
+      name: 'Banana nanica',
+      slug: 'banana-nanica',
+      category: 'frutas',
+      servingSize: 100,
+      calories: 89,
+      protein: 1.1,
+      carbs: 22.8,
+      fat: 0.3,
+      fiber: 2.6,
+      origin: 'taco',
+    },
+    {
+      name: 'Brócolis cozido',
+      slug: 'brocolis-cozido',
+      category: 'vegetais',
+      servingSize: 100,
+      calories: 55,
+      protein: 3.7,
+      carbs: 11.1,
+      fat: 0.6,
+      fiber: 3.8,
+      origin: 'taco',
+    },
+  ];
+
+  for (const food of foods) {
+    await prisma.food.upsert({
+      where: { slug: food.slug },
+      update: {
+        ...food,
+        createdById: trainerId,
+      },
+      create: {
+        id: randomUUID(),
+        ...food,
+        createdById: trainerId,
+      },
+    });
+  }
+}
+
+async function seedNutritionPlans(trainerId: string, clientIds: string[]) {
+  if (!clientIds.length) {
+    return;
+  }
+
+  const foods = await prisma.food.findMany({ take: 5, orderBy: { name: 'asc' } });
+  if (!foods.length) {
+    return;
+  }
+
+  const clientId = clientIds[0];
+  const existing = await prisma.nutritionPlan.findFirst({
+    where: { trainerId, clientId, status: NutritionPlanStatus.ACTIVE },
+  });
+
+  if (existing) {
+    return;
+  }
+
+  const plan = await prisma.nutritionPlan.create({
+    data: {
+      id: randomUUID(),
+      trainerId,
+      clientId,
+      title: 'Plano Alimentar - Hipertrofia',
+      description: 'Plano equilibrado com foco em ganho de massa magra e recuperação.',
+      status: NutritionPlanStatus.ACTIVE,
+      caloriesGoal: 2400,
+      macros: { protein: 180, carbs: 260, fat: 70 },
+      startDate: new Date(),
+      meals: {
+        create: [
+          {
+            id: randomUUID(),
+            name: 'Café da manhã',
+            order: 0,
+            scheduledAt: new Date().setHours(7, 0, 0, 0),
+            notes: 'Adicionar fonte de vitamina C',
+            items: {
+              create: [
+                {
+                  id: randomUUID(),
+                  foodId: foods[3]?.id,
+                  quantity: 120,
+                  unit: 'g',
+                  macros: {
+                    calories: (foods[3]?.calories ?? 0) * 1.2,
+                    protein: (foods[3]?.protein ?? 0) * 1.2,
+                    carbs: (foods[3]?.carbs ?? 0) * 1.2,
+                    fat: (foods[3]?.fat ?? 0) * 1.2,
+                  },
+                },
+                {
+                  id: randomUUID(),
+                  foodId: foods[2]?.id,
+                  quantity: 120,
+                  unit: 'g',
+                  macros: {
+                    calories: (foods[2]?.calories ?? 0) * 1.2,
+                    protein: (foods[2]?.protein ?? 0) * 1.2,
+                    carbs: (foods[2]?.carbs ?? 0) * 1.2,
+                    fat: (foods[2]?.fat ?? 0) * 1.2,
+                  },
+                },
+              ],
+            },
+          },
+          {
+            id: randomUUID(),
+            name: 'Almoço',
+            order: 1,
+            scheduledAt: new Date().setHours(13, 0, 0, 0),
+            notes: 'Adicionar salada verde',
+            items: {
+              create: [
+                {
+                  id: randomUUID(),
+                  foodId: foods[0]?.id,
+                  quantity: 150,
+                  unit: 'g',
+                  macros: {
+                    calories: (foods[0]?.calories ?? 0) * 1.5,
+                    protein: (foods[0]?.protein ?? 0) * 1.5,
+                    carbs: (foods[0]?.carbs ?? 0) * 1.5,
+                    fat: (foods[0]?.fat ?? 0) * 1.5,
+                  },
+                },
+                {
+                  id: randomUUID(),
+                  foodId: foods[1]?.id,
+                  quantity: 100,
+                  unit: 'g',
+                  macros: {
+                    calories: foods[1]?.calories ?? 0,
+                    protein: foods[1]?.protein ?? 0,
+                    carbs: foods[1]?.carbs ?? 0,
+                    fat: foods[1]?.fat ?? 0,
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  });
+
+  console.log(`✅ Nutrition plan created for client ${clientId}: ${plan.title}`);
+}
+
 async function main() {
   await ensureRoles();
   await ensureAdmin();
   const { trainer, trainerClients } = await ensureTrainerWithClients();
+  await seedAssessmentTemplates(trainer.id);
+  await seedAssessments(trainer.id, trainerClients);
   await seedExercises(trainer.id);
   await seedWorkouts(trainer.id, trainerClients);
+  await seedFoodDatabase(trainer.id);
+  await seedNutritionPlans(trainer.id, trainerClients);
 }
 
 main()
