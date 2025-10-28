@@ -1,345 +1,212 @@
-# 🏋️ CapiFit - Sistema Completo de Personal Trainer
+# 🏋️‍♀️ CapiFit Platform
 
-Sistema profissional para gerenciamento de personal trainers e clientes, desenvolvido com React + Node.js + MySQL/PostgreSQL.
+CapiFit is a full-stack platform that empowers personal trainers to manage clients, training programs, nutrition plans and communication in a single place. The current iteration focuses on delivering a production-grade authentication and authorization flow with a hardened backend, React frontend, and modern deployment tooling.
 
-## 🚀 Instalação em Produção - VPS Ubuntu 24.04
+## ✨ Highlights
 
-### Pré-requisitos
+- **Real authentication** with JWT access/refresh tokens, secure cookie rotation and role-based access control (admin/trainer/client).
+- **PostgreSQL + Prisma** data layer with migrations, seeds, hashed refresh tokens and audit trail primitives.
+- **React 18 + Vite** frontend, React Query powered session management, guarded routes and axios interceptors with automatic refresh.
+- **Production-ready tooling**: Docker Compose stack (PostgreSQL, Redis, API, Web), PM2 ecosystem file, structured logging, rate limiting, Helmet and CORS hardening.
+- **Testing foundation**: Vitest + Supertest API tests validating authentication flows and error handling.
 
-```bash
-# Atualizar o sistema
-sudo apt update && sudo apt upgrade -y
+## 🧱 Project Structure
 
-# Instalar Node.js 20.x
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get install -y nodejs
-
-# Instalar MySQL
-sudo apt install mysql-server -y
-sudo systemctl start mysql
-sudo systemctl enable mysql
-
-# Configurar MySQL (definir senha root)
-sudo mysql_secure_installation
-
-# Instalar Nginx
-sudo apt install nginx -y
-sudo systemctl start nginx
-sudo systemctl enable nginx
-
-# Instalar PM2 para gerenciar processos Node.js
-sudo npm install -g pm2
+```
+.
+├── apps/
+│   ├── api/        # Express 5 + TypeScript + Prisma backend
+│   └── web/        # React (Vite) frontend
+├── docker-compose.yml
+├── ecosystem.config.cjs
+└── README.md
 ```
 
-### 1. Preparação do Projeto
+## 🛠️ Tech Stack
+
+| Layer      | Technology |
+|------------|------------|
+| Backend    | Node.js 20, Express 5, TypeScript, Prisma ORM |
+| Database   | PostgreSQL (Redis reserved for future queues) |
+| Frontend   | React 18, Vite, React Query, React Hook Form, Zod |
+| Auth       | JWT (access + refresh), bcrypt password hashing |
+| Deployment | Docker Compose, PM2, Nginx, npm workspaces |
+| Testing    | Vitest, Supertest |
+
+## ✅ Prerequisites
+
+- Node.js 20+
+- npm 10+
+- Docker & Docker Compose (optional, for containerized setup)
+- PostgreSQL 14+ (if not using Docker)
+
+## 🚀 Quick Start (local development)
+
+1. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+2. **Copy environment files**
+   ```bash
+   cp apps/api/.env.example apps/api/.env
+   cp apps/web/.env.example apps/web/.env
+   ```
+
+3. **Generate Prisma client & run migrations**
+   ```bash
+   npm run generate --workspace apps/api
+   npm run migrate:dev --workspace apps/api
+   npm run seed --workspace apps/api
+   ```
+
+4. **Start both applications in watch mode**
+   ```bash
+   npm run dev
+   ```
+   - API available on `http://localhost:3001` (health check at `/health`).
+   - Web available on `http://localhost:5173`.
+
+5. **Individual services**
+   ```bash
+   npm run dev:api   # API only
+   npm run dev:web   # Web only
+   ```
+
+## 🧪 Testing & Linting
 
 ```bash
-# Navegar para o diretório web
-cd /var/www
-
-# Clonar o projeto
-git clone https://github.com/seu-usuario/capifit.git capifit_app
-cd capifit_app
-
-# Definir permissões
-sudo chown -R $USER:$USER /var/www/capifit_app
+npm run test:api      # Vitest + Supertest authentication coverage
+npm run test:web      # Vitest placeholder (extend with UI tests)
+npm run lint          # Lint API + Web
+npm run lint:api
+npm run lint:web
 ```
 
-### 2. Configuração do Banco de Dados MySQL
+> **Note:** API tests mock the service layer to exercise Express validation and error handling without a live database. Extend with integration tests once infrastructure (Redis, email, etc.) is introduced.
+
+## 🏗️ Build & Production Commands
 
 ```bash
-# Acessar MySQL
-sudo mysql -u root -p
-
-# Executar os comandos SQL
-CREATE DATABASE capifit_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'capifit_user'@'localhost' IDENTIFIED BY 'SuaSenhaSegura123!';
-GRANT ALL PRIVILEGES ON capifit_db.* TO 'capifit_user'@'localhost';
-FLUSH PRIVILEGES;
-EXIT;
-
-# Importar estrutura do banco
-cd /var/www/capifit_app
-mysql -u capifit_user -p capifit_db < sql/mysql/02_create_tables.sql
-mysql -u capifit_user -p capifit_db < sql/mysql/03_sample_data.sql
+npm run build:api     # tsup build → apps/api/dist
+npm run build:web     # Vite production build → apps/web/build
+npm run build         # Build both workspaces
 ```
 
-### 3. Configuração do Backend
+### PM2 deployment
 
 ```bash
-# Navegar para pasta backend
-cd /var/www/capifit_app/backend
-
-# Instalar dependências
-npm install
-
-# Criar arquivo de ambiente
-cp .env.example .env
-```
-
-**Editar `/var/www/capifit_app/backend/.env`:**
-```bash
-# Database Configuration
-VITE_DB_TYPE=mysql
-VITE_DB_HOST=localhost
-VITE_DB_PORT=3306
-VITE_DB_NAME=capifit_db
-VITE_DB_USER=capifit_user
-VITE_DB_PASSWORD=SuaSenhaSegura123!
-
-# Server Configuration
-PORT=3001
-JWT_SECRET=sua_chave_jwt_muito_segura_aqui_123!
-FRONTEND_URL=https://capifit.app.br
-
-# API Configuration
-VITE_API_URL=https://capifit.app.br/api
-```
-
-### 4. Configuração do Frontend
-
-```bash
-# Navegar para pasta principal
-cd /var/www/capifit_app
-
-# Instalar dependências
-npm install
-
-# Criar arquivo de ambiente
-cp .env.example .env
-```
-
-**Editar `/var/www/capifit_app/.env`:**
-```bash
-VITE_API_URL=https://capifit.app.br/api
-VITE_DB_TYPE=mysql
-VITE_DB_HOST=localhost
-VITE_DB_PORT=3306
-VITE_DB_NAME=capifit_db
-VITE_DB_USER=capifit_user
-VITE_DB_PASSWORD=SuaSenhaSegura123!
-```
-
-### 5. Build do Frontend
-
-```bash
-cd /var/www/capifit_app
 npm run build
-```
-
-### 6. Configuração do Nginx
-
-**Criar `/etc/nginx/sites-available/capifit`:**
-
-```nginx
-server {
-    listen 80;
-    server_name capifit.app.br www.capifit.app.br;
-    
-    # Redirect HTTP to HTTPS
-    return 301 https://$server_name$request_uri;
-}
-
-server {
-    listen 443 ssl http2;
-    server_name capifit.app.br www.capifit.app.br;
-    
-    # SSL Configuration (Configure após obter certificados SSL)
-    # ssl_certificate /path/to/ssl/certificate.crt;
-    # ssl_certificate_key /path/to/ssl/private.key;
-    
-    # Frontend - arquivos estáticos
-    location / {
-        root /var/www/capifit_app/dist;
-        index index.html;
-        try_files $uri $uri/ /index.html;
-        
-        # Cache para arquivos estáticos
-        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
-            expires 1y;
-            add_header Cache-Control "public, immutable";
-        }
-    }
-    
-    # Backend API - proxy para Node.js
-    location /api {
-        proxy_pass http://localhost:3001;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-        
-        # Timeout settings
-        proxy_connect_timeout       60s;
-        proxy_send_timeout          60s;
-        proxy_read_timeout          60s;
-    }
-    
-    # Security Headers
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-XSS-Protection "1; mode=block" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header Referrer-Policy "no-referrer-when-downgrade" always;
-    add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline'" always;
-    
-    # Gzip compression
-    gzip on;
-    gzip_vary on;
-    gzip_min_length 1024;
-    gzip_types text/plain text/css text/xml text/javascript application/javascript application/xml+rss application/json;
-}
-```
-
-**Ativar site e reiniciar Nginx:**
-
-```bash
-# Ativar configuração
-sudo ln -s /etc/nginx/sites-available/capifit /etc/nginx/sites-enabled/
-
-# Remover configuração padrão
-sudo rm /etc/nginx/sites-enabled/default
-
-# Testar configuração
-sudo nginx -t
-
-# Reiniciar Nginx
-sudo systemctl restart nginx
-```
-
-### 7. Configuração SSL com Certbot (Let's Encrypt)
-
-```bash
-# Instalar Certbot
-sudo apt install snapd -y
-sudo snap install core; sudo snap refresh core
-sudo snap install --classic certbot
-
-# Criar link simbólico
-sudo ln -s /snap/bin/certbot /usr/bin/certbot
-
-# Obter certificado SSL
-sudo certbot --nginx -d capifit.app.br -d www.capifit.app.br
-
-# Configurar renovação automática
-sudo systemctl status snap.certbot.renew.timer
-```
-
-### 8. Iniciar Aplicação com PM2
-
-```bash
-# Navegar para pasta backend
-cd /var/www/capifit_app/backend
-
-# Iniciar backend com PM2
-pm2 start server.js --name "capifit-backend"
-
-# Salvar configuração PM2
-pm2 save
-
-# Configurar PM2 para iniciar automaticamente
-pm2 startup
-sudo env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u $USER --hp $HOME
-
-# Verificar status
+pm2 start ecosystem.config.cjs
 pm2 status
 ```
 
-### 9. Configuração do Firewall
+`ecosystem.config.cjs` manages two apps:
+- `capifit-api` → `node dist/server.js` (Express API)
+- `capifit-web` → `vite preview` serving the built SPA (port 4173)
+
+### Docker Compose deployment
 
 ```bash
-# Configurar UFW
-sudo ufw enable
-sudo ufw allow OpenSSH
-sudo ufw allow 'Nginx Full'
-sudo ufw allow 3306  # MySQL (se necessário acesso externo)
-sudo ufw status
+docker-compose up --build
 ```
 
-### 10. Monitoramento e Logs
+Services:
+- `postgres`: persistent PostgreSQL 16 database
+- `redis`: Redis 7 (reserved for job queues / rate limiting)
+- `api`: Express API container (`apps/api/Dockerfile`)
+- `web`: Nginx static host + proxy for `/api` (`apps/web/Dockerfile`)
 
-```bash
-# Logs do Backend
-pm2 logs capifit-backend
+Frontend reachable at `http://localhost:8080`, API proxied under `/api`.
 
-# Logs do Nginx
-sudo tail -f /var/log/nginx/access.log
-sudo tail -f /var/log/nginx/error.log
+## 🔐 Security & Observability
 
-# Logs do MySQL
-sudo tail -f /var/log/mysql/error.log
+- Helmet, CORS (frontend origin whitelist), rate limiting (RateLimiterMemory).
+- JWT access tokens in Authorization header, refresh tokens stored as HTTP-only cookies with server-side hashing and rotation.
+- Prisma models for `users`, `roles`, `refresh_tokens`, `audit_logs` ready for expansion.
+- Structured logging via Pino, request correlation through `pino-http`.
+- Centralized error handler that differentiates developer vs user messages and returns 422 validation payloads.
 
-# Status dos serviços
-sudo systemctl status nginx
-sudo systemctl status mysql
-pm2 status
-```
+## 🗄️ Database & Seeding
 
-### 11. Comandos Úteis para Manutenção
+| Prisma Model | Purpose |
+|--------------|---------|
+| `User`       | Core user entity with status, soft-delete column and relations |
+| `Role` / `UserRole` | RBAC assignments (admin, trainer, client) |
+| `RefreshToken` | Hashed refresh tokens with revocation / expiry tracking |
+| `AuditLog` | Future auditing trail for sensitive actions |
 
-```bash
-# Reiniciar backend
-pm2 restart capifit-backend
+Initial migration `202501010001_init` builds the schema and triggers. Seeding (`npm run seed --workspace apps/api`) creates:
+- Roles: admin, trainer, client
+- Bootstrap admin user `admin@capifit.com` (password `ChangeMe123!` — change in production via `ADMIN_DEFAULT_PASSWORD` env)
 
-# Atualizar código do repositório
-cd /var/www/capifit_app
-git pull origin main
-npm run build
-pm2 restart capifit-backend
+## 🌐 Environment Variables
 
-# Backup do banco de dados
-mysqldump -u capifit_user -p capifit_db > backup_$(date +%Y%m%d_%H%M%S).sql
+### API (`apps/api/.env`)
+| Variable | Description |
+|----------|-------------|
+| `PORT` | API port (default 3001) |
+| `API_BASE_URL` | Public base URL of the API |
+| `FRONTEND_URL` | Allowed CORS origin |
+| `DATABASE_URL` | PostgreSQL connection string |
+| `SHADOW_DATABASE_URL` | Shadow DB for Prisma migrations |
+| `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` | Strong secrets (≥32 chars) |
+| `JWT_ACCESS_TTL` / `JWT_REFRESH_TTL` | Token lifetimes (seconds) |
+| `PASSWORD_SALT_ROUNDS` | Bcrypt salt cost (12 in production) |
+| `REDIS_URL` | Redis connection (reserved for queues/rate limiters) |
+| `SMTP_*` | Email provider configuration (future notifications) |
+| `FILE_STORAGE_DRIVER` | `local` or `s3` (uploads roadmap) |
+| `LOG_LEVEL` | Pino log level |
+| `RATE_LIMIT_WINDOW_MS` / `RATE_LIMIT_MAX` | Rate limiting window + quota |
 
-# Restaurar backup
-mysql -u capifit_user -p capifit_db < backup_arquivo.sql
-```
+### Web (`apps/web/.env`)
+| Variable | Description |
+|----------|-------------|
+| `VITE_API_URL` | Base API URL (e.g. `http://localhost:3001/api`) |
+| `VITE_WS_URL` | Realtime/WebSocket base URL (future use) |
+| `VITE_DEV_SERVER_PORT` | Vite dev port (defaults 5173) |
+| `VITE_PREVIEW_PORT` | `vite preview` port (defaults 4173) |
+| `VITE_GOOGLE_ANALYTICS_ID` | Analytics integration (optional) |
+| `VITE_SENTRY_DSN` | Error tracking DSN (optional) |
 
-## ⚠️ Solução de Problemas Comuns
+## 📡 API Overview
 
-### PathError ao iniciar PM2
-Se ocorrer erro "Missing parameter name at index 1: *", as correções já foram aplicadas no código:
-- Alteração do wildcard `'*'` para `'/*'` no middleware 404
-- Remoção do optional chaining `?.()` para compatibilidade com Node.js em produção
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/v1/auth/register` | Creates user (admin/trainer/client) with immediate session |
+| `POST` | `/api/v1/auth/login` | Authenticates and issues tokens |
+| `POST` | `/api/v1/auth/refresh` | Rotates refresh token (HTTP-only cookie) |
+| `POST` | `/api/v1/auth/logout` | Revokes refresh token & clears cookie |
+| `GET`  | `/api/v1/auth/me` | Returns authenticated profile |
+| `GET`  | `/api/v1/profile` | Authenticated profile shortcut |
+| `GET`  | `/health` | Liveness probe |
 
-### Dependências Faltando
-Se ocorrerem erros de pacotes não encontrados:
-```bash
-# Verificar se express-rate-limit está instalado corretamente
-cd /var/www/capifit_app/backend
-npm install express-rate-limit@^8.1.0
-```
+All non-public endpoints require `Authorization: Bearer <access_token>` and will transparently refresh via the frontend axios interceptor when possible.
 
-## 🔐 Credenciais Padrão
+## 🧩 Frontend Notes
 
-**Administrador:**
-- Email: `admin@capifit.com`
-- Senha: `password`
+- `AuthContext` manages session state, persists minimal data (token + user) and listens to a `capifit:session-expired` custom event triggered by the axios interceptor when refresh fails.
+- `AuthGuard` wraps all private routes, rendering a loader while validating the session and redirecting anonymous users to `/login`.
+- Login & register forms share server-side validation schemas using Zod to provide consistent error messaging.
+- Header and sidebar consume `useAuth()` context to show user info and handle logout. Notification/assessment/chat modules now rely on context (no localStorage fallbacks).
 
-## 📁 Estrutura do Projeto
+## 🚧 Roadmap
 
-```
-capifit_app/
-├── backend/                 # API Node.js + Express
-│   ├── routes/             # Rotas da API
-│   ├── server.js           # Servidor principal
-│   └── package.json        # Dependências backend
-├── src/                    # Frontend React
-├── sql/                    # Scripts SQL
-│   └── mysql/              # Scripts MySQL
-├── dist/                   # Build de produção
-└── package.json            # Dependências frontend
-```
+- Persist training plans, nutrition, assessments and messaging using the new Prisma foundation.
+- Integrate Redis-backed queues for transactional emails and push notifications.
+- Expand automated test coverage (service layer, React components, end-to-end scenarios).
+- Introduce file storage abstraction (local/S3) for progress photos and attachments.
+- Harden audit logging & observability (Prometheus/Grafana exporters).
 
-## 🌐 Acesso
+## 🆘 Troubleshooting
 
-Após a instalação, acesse:
-- **Frontend:** https://capifit.app.br
-- **API:** https://capifit.app.br/api
-- **Health Check:** https://capifit.app.br/api/health
+| Issue | Resolution |
+|-------|-----------|
+| `npm install` fails due to registry policy | Ensure network access to `https://registry.npmjs.org/` or configure an allowed mirror. |
+| Prisma migration errors | Verify `DATABASE_URL`, ensure Postgres is reachable, rerun `npm run migrate:dev`. |
+| Cookies not persisting during local dev | Confirm frontend uses `http://localhost` (not 127.0.0.1) so `SameSite=Strict` cookies are considered same-site. |
+| Docker build failures | Clean previous images (`docker compose down -v`), ensure buildx supports `node:20-alpine`. |
 
----
+## 🧾 License
 
-✅ **Sistema pronto para produção com MySQL, SSL, e monitoramento completo!**
+This project is proprietary to the original stakeholders. All rights reserved.
