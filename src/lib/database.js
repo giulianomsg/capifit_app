@@ -301,7 +301,16 @@ export class DatabaseService {
   static async markNotificationAsRead(notificationId) {
     return this.update('notifications', notificationId, { is_read: true });
   }
-  
+
+  static async getMenus() {
+    try {
+      const response = await apiClient?.get('/menus');
+      return { data: response?.data?.menus || [], error: null };
+    } catch (error) {
+      return { data: [], error: error?.response?.data?.message || 'Erro ao carregar menus' };
+    }
+  }
+
   // File upload operations
   static async uploadFile(fileData) {
     try {

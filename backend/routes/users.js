@@ -1,189 +1,203 @@
 const express = require('express');
+const bcrypt = require('bcryptjs');
+const { query } = require('../lib/db');
+const { buildWhereClause, buildOrderByClause, buildLimitClause } = require('../lib/query-builder');
+const parseQueryOptions = require('../middleware/parseQueryOptions');
+const authMiddleware = require('../middleware/auth');
 
 const router = express.Router();
 
-// Mock data for users (replace with database queries)
-const mockUsers = [
-  {
-    id: 1,
-    name: 'João Silva',
-    email: 'joao@example.com',
-    role: 'client',
-    status: 'active',
-    created_at: '2024-01-15'
-  },
-  {
-    id: 2,
-    name: 'Maria Santos',
-    email: 'maria@example.com',
-    role: 'trainer',
-    status: 'active',
-    created_at: '2024-02-20'
-  }
-];
+function sanitizeUser(record) {
+  return {
+    id: record.id,
+    email: record.email,
+    full_name: record.full_name,
+    name: record.full_name,
+    role: record.role,
+    phone: record.phone,
+    status: record.is_active ? 'active' : 'inactive',
+    is_active: record.is_active,
+    created_at: record.created_at,
+    updated_at: record.updated_at,
+  };
+}
 
-const parseJSONParam = (value) => {
-  if (!value) return undefined;
+async function buildUsersQuery(baseWhere, queryOptions) {
+  const values = [];
+  const whereClause = buildWhereClause({ ...baseWhere, ...queryOptions.where }, values);
+  const orderClause = buildOrderByClause(queryOptions.orderBy);
+  const limitClause = buildLimitClause(queryOptions.limit, queryOptions.offset);
+
+  const filters = whereClause ? `WHERE ${whereClause}` : '';
+  const sql = `
+    SELECT id, email, full_name, role, phone, is_active, created_at, updated_at
+    FROM users
+    ${filters}
+    ${orderClause}
+    ${limitClause}
+  `;
+
+  const countSql = `SELECT COUNT(*) as total FROM users ${filters}`;
+
+  return { sql, countSql, values };
+}
+
+router.use(authMiddleware);
+
+router.get('/', parseQueryOptions, async (req, res) => {
   try {
-    return JSON.parse(value);
-  } catch (error) {
-    console.warn('Não foi possível interpretar parâmetro JSON:', value);
-    return undefined;
-  }
-};
-
-const matchesFilters = (entity, filters) => {
-  if (!filters || typeof filters !== 'object') return true;
-
-  return Object.entries(filters).every(([key, value]) => {
-    if (key === '$or' && Array.isArray(value)) {
-      return value.some((condition) => matchesFilters(entity, condition));
+    const baseWhere = {};
+    if (req.query.role) {
+      baseWhere.role = req.query.role;
+    }
+    if (req.query.status) {
+      baseWhere.is_active = req.query.status === 'active';
     }
 
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-      if (value?.$in && Array.isArray(value.$in)) {
-        return value.$in.includes(entity[key]);
-      }
+    const limitValue = Number.isFinite(req.queryOptions.limit) ? Number(req.queryOptions.limit) : undefined;
+    const offsetValue = Number.isFinite(req.queryOptions.offset) ? Number(req.queryOptions.offset) : undefined;
 
-      if (value?.$eq !== undefined) {
-        return entity[key] === value.$eq;
-      }
+    const options = {
+      where: req.queryOptions.where,
+      orderBy: Object.keys(req.queryOptions.orderBy).length ? req.queryOptions.orderBy : { created_at: 'desc' },
+      limit: limitValue,
+      offset: offsetValue,
+    };
 
-      return Object.entries(value).every(([, nestedValue]) => entity[key] === nestedValue);
-    }
+    const { sql, countSql, values } = await buildUsersQuery(baseWhere, options);
 
-    return entity[key] === value;
-  });
-};
+    const [userResult, countResult] = await Promise.all([
+      query(sql, values),
+      query(countSql, values),
+    ]);
 
-// Get all users
-router.get('/', (req, res) => {
-  try {
-    const { role, status, page = 1, limit = 10, where, orderBy } = req.query;
-
-    let filteredUsers = [...mockUsers];
-
-    const parsedWhere = parseJSONParam(where);
-    const parsedOrder = parseJSONParam(orderBy);
-
-    if (parsedWhere) {
-      filteredUsers = filteredUsers.filter((user) => matchesFilters(user, parsedWhere));
-    }
-
-    if (role) {
-      filteredUsers = filteredUsers.filter((user) => user.role === role);
-    }
-
-    if (status) {
-      filteredUsers = filteredUsers.filter((user) => user.status === status);
-    }
-
-    if (parsedOrder && parsedOrder?.name) {
-      const direction = String(parsedOrder.name).toLowerCase() === 'desc' ? -1 : 1;
-      filteredUsers.sort((a, b) => a.name.localeCompare(b.name) * direction);
-    }
-
-    const numericLimit = Number(limit) || 10;
-    const numericPage = Number(page) || 1;
-    const startIndex = (numericPage - 1) * numericLimit;
-    const endIndex = startIndex + numericLimit;
-    const paginatedUsers = filteredUsers.slice(startIndex, endIndex);
+    const rows = userResult?.[0] || [];
+    const countRows = countResult?.[0] || [];
+    const users = rows.map(sanitizeUser);
+    const total = countRows?.[0]?.total || 0;
+    const limit = typeof limitValue === 'number' ? limitValue : users.length;
+    const offset = typeof offsetValue === 'number' ? offsetValue : 0;
 
     res.json({
-      users: paginatedUsers,
+      users,
       pagination: {
-        currentPage: numericPage,
-        totalPages: Math.ceil(filteredUsers.length / numericLimit) || 1,
-        totalUsers: filteredUsers.length,
-        hasNext: endIndex < filteredUsers.length,
-        hasPrev: startIndex > 0,
+        total,
+        limit,
+        offset,
       },
     });
   } catch (error) {
     console.error('Get users error:', error);
-    res.status(500).json({
-      error: 'Erro ao buscar usuários',
-    });
+    res.status(500).json({ message: 'Erro ao buscar usuários' });
   }
 });
 
-// Get user by ID
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
-    const { id } = req.params;
-    const user = mockUsers.find((u) => u?.id === parseInt(id, 10));
+    const [rows] = await query('SELECT * FROM users WHERE id = ? LIMIT 1', [req.params.id]);
+    const user = rows?.[0];
 
     if (!user) {
-      return res.status(404).json({
-        error: 'Usuário não encontrado',
-      });
+      return res.status(404).json({ message: 'Usuário não encontrado' });
     }
 
-    res.json({ user });
-
+    res.json({ user: sanitizeUser(user) });
   } catch (error) {
     console.error('Get user error:', error);
-    res.status(500).json({
-      error: 'Erro ao buscar usuário',
-    });
+    res.status(500).json({ message: 'Erro ao buscar usuário' });
   }
 });
 
-// Update user
-router.put('/:id', (req, res) => {
+router.post('/', async (req, res) => {
   try {
-    const { id } = req.params;
-    const { name, email, status } = req.body;
+    const { email, full_name, role = 'client', phone, password, is_active = true } = req.body || {};
 
-    const userIndex = mockUsers.findIndex((u) => u?.id === parseInt(id, 10));
-
-    if (userIndex === -1) {
-      return res.status(404).json({
-        error: 'Usuário não encontrado',
-      });
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email e senha são obrigatórios' });
     }
 
-    // Update user data
-    if (name) mockUsers[userIndex].name = name;
-    if (email) mockUsers[userIndex].email = email;
-    if (status) mockUsers[userIndex].status = status;
+    const normalizedEmail = email.toLowerCase();
+    const [existing] = await query('SELECT id FROM users WHERE email = ? LIMIT 1', [normalizedEmail]);
 
-    res.json({
-      message: 'Usuário atualizado com sucesso',
-      user: mockUsers?.[userIndex],
-    });
+    if (existing?.length) {
+      return res.status(409).json({ message: 'Já existe um usuário com este email' });
+    }
 
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    await query(
+      `INSERT INTO users (id, email, password_hash, role, full_name, phone, is_active)
+       VALUES (UUID(), ?, ?, ?, ?, ?, ?)`,
+      [normalizedEmail, passwordHash, role, full_name || '', phone || null, is_active ? 1 : 0]
+    );
+
+    const [createdRows] = await query('SELECT * FROM users WHERE email = ? LIMIT 1', [normalizedEmail]);
+    res.status(201).json({ user: sanitizeUser(createdRows?.[0]) });
+  } catch (error) {
+    console.error('Create user error:', error);
+    res.status(500).json({ message: 'Erro ao criar usuário' });
+  }
+});
+
+router.put('/:id', async (req, res) => {
+  try {
+    const { full_name, role, phone, status, is_active } = req.body || {};
+    const updates = [];
+    const values = [];
+
+    if (full_name !== undefined) {
+      updates.push('full_name = ?');
+      values.push(full_name);
+    }
+    if (role !== undefined) {
+      updates.push('role = ?');
+      values.push(role);
+    }
+    if (phone !== undefined) {
+      updates.push('phone = ?');
+      values.push(phone);
+    }
+    if (status !== undefined || is_active !== undefined) {
+      const normalizedStatus = status !== undefined ? status === 'active' : !!is_active;
+      updates.push('is_active = ?');
+      values.push(normalizedStatus ? 1 : 0);
+    }
+
+    if (!updates.length) {
+      return res.status(400).json({ message: 'Nenhuma alteração fornecida' });
+    }
+
+    values.push(req.params.id);
+
+    const [result] = await query(
+      `UPDATE users SET ${updates.join(', ')}, updated_at = NOW() WHERE id = ?`,
+      values
+    );
+
+    if (result.affectedRows === 0 && result.rowCount === 0) {
+      return res.status(404).json({ message: 'Usuário não encontrado' });
+    }
+
+    const [rows] = await query('SELECT * FROM users WHERE id = ? LIMIT 1', [req.params.id]);
+    res.json({ user: sanitizeUser(rows?.[0]) });
   } catch (error) {
     console.error('Update user error:', error);
-    res.status(500).json({
-      error: 'Erro ao atualizar usuário',
-    });
+    res.status(500).json({ message: 'Erro ao atualizar usuário' });
   }
 });
 
-// Delete user
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
-    const { id } = req.params;
-    const userIndex = mockUsers.findIndex((u) => u?.id === parseInt(id, 10));
+    const [result] = await query('DELETE FROM users WHERE id = ?', [req.params.id]);
 
-    if (userIndex === -1) {
-      return res.status(404).json({
-        error: 'Usuário não encontrado',
-      });
+    if (result.affectedRows === 0 && result.rowCount === 0) {
+      return res.status(404).json({ message: 'Usuário não encontrado' });
     }
 
-    mockUsers.splice(userIndex, 1);
-
-    res.json({
-      message: 'Usuário removido com sucesso',
-    });
-
+    res.json({ message: 'Usuário removido com sucesso' });
   } catch (error) {
     console.error('Delete user error:', error);
-    res.status(500).json({
-      error: 'Erro ao remover usuário',
-    });
+    res.status(500).json({ message: 'Erro ao remover usuário' });
   }
 });
 

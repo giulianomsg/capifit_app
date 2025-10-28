@@ -3,22 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import Button from '../../../components/ui/Button';
 import Input from '../../../components/ui/Input';
 import Icon from '../../../components/AppIcon';
+import { useAuth } from '../../../hooks/useAuth';
 
 const LoginForm = () => {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
     password: ''
   });
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
-
-  // Mock credentials for different user types - Updated for CapiFit
-  const mockCredentials = {
-    trainer: { email: 'joao.silva@capifit.com', password: 'trainer123' },
-    client: { email: 'maria.santos@gmail.com', password: 'client123' },
-    admin: { email: 'admin@capifit.com', password: 'admin123' }
-  };
 
   const handleInputChange = (e) => {
     const { name, value } = e?.target;
@@ -61,35 +56,21 @@ const LoginForm = () => {
     if (!validateForm()) return;
     
     setIsLoading(true);
-    
-    // Simulate API call
-    setTimeout(() => {
-      // Check mock credentials
-      const isValidTrainer = formData?.email === mockCredentials?.trainer?.email && 
-                           formData?.password === mockCredentials?.trainer?.password;
-      const isValidClient = formData?.email === mockCredentials?.client?.email && 
-                          formData?.password === mockCredentials?.client?.password;
-      const isValidAdmin = formData?.email === mockCredentials?.admin?.email && 
-                         formData?.password === mockCredentials?.admin?.password;
-      
-      if (isValidTrainer || isValidClient || isValidAdmin) {
-        // Store user info in localStorage with consistent keys
-        const userRole = isValidTrainer ? 'trainer' : isValidClient ? 'client' : 'admin';
-        localStorage.setItem('capifit_userRole', userRole);
-        localStorage.setItem('capifit_isAuthenticated', 'true');
-        localStorage.setItem('capifit_user_logged_in', 'true'); // Keep for backward compatibility
-        localStorage.setItem('capifit_loginTime', new Date()?.toISOString());
-        
-        // Navigate to dashboard
-        navigate('/dashboard-principal');
-      } else {
-        setErrors({
-          general: 'Email ou senha incorretos. Use as credenciais de demonstração do CapiFit.'
-        });
+
+    try {
+      const { error } = await login(formData.email, formData.password);
+
+      if (error) {
+        setErrors({ general: error });
+        return;
       }
-      
+
+      navigate('/dashboard-principal');
+    } catch (error) {
+      setErrors({ general: error?.message || 'Erro inesperado ao autenticar' });
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   const handleForgotPassword = () => {
@@ -155,24 +136,6 @@ const LoginForm = () => {
       >
         Entrar
       </Button>
-      {/* Demo Credentials Info */}
-      <div className="mt-6 p-4 bg-muted/50 rounded-lg">
-        <h4 className="text-sm font-semibold text-foreground mb-2 flex items-center">
-          <Icon name="Info" size={16} className="mr-2 text-primary" />
-          Credenciais de Demonstração - CapiFit
-        </h4>
-        <div className="space-y-2 text-xs text-muted-foreground">
-          <div>
-            <strong>Personal Trainer:</strong> joao.silva@capifit.com / trainer123
-          </div>
-          <div>
-            <strong>Cliente:</strong> maria.santos@gmail.com / client123
-          </div>
-          <div>
-            <strong>Administrador:</strong> admin@capifit.com / admin123
-          </div>
-        </div>
-      </div>
     </form>
   );
 };

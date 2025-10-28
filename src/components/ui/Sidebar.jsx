@@ -1,13 +1,26 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Icon from '../AppIcon';
 import Button from './Button';
+import { useAuth } from '../../hooks/useAuth';
+import DatabaseService from '../../lib/database';
+
+const fallbackMenus = [
+  { label: 'Dashboard', path: '/dashboard-principal', icon: 'LayoutDashboard' },
+  { label: 'Perfil', path: '/perfil-do-personal', icon: 'User' },
+  { label: 'Alunos', path: '/gerenciar-alunos', icon: 'Users' },
+  { label: 'Treinos', path: '/criar-treinos', icon: 'Dumbbell' },
+  { label: 'Mensagens', path: '/chat-communication-hub', icon: 'MessageSquare' },
+];
 
 const Sidebar = ({ isOpen = false, onClose }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [expandedSections, setExpandedSections] = useState({});
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [menuItems, setMenuItems] = useState(fallbackMenus);
+  const [loadingMenus, setLoadingMenus] = useState(false);
 
   const isAuthPage = ['/login', '/register', '/']?.includes(location?.pathname);
 
@@ -15,70 +28,34 @@ const Sidebar = ({ isOpen = false, onClose }) => {
     return null;
   }
 
-  const menuItems = [
-    {
-      label: 'Dashboard',
-      path: '/dashboard-principal',
-      icon: 'LayoutDashboard',
-      tooltip: 'Visão geral e métricas principais'
-    },
-    {
-      label: 'Perfil',
-      path: '/perfil-do-personal',
-      icon: 'User',
-      tooltip: 'Gerenciar perfil profissional'
-    },
-    {
-      label: 'Alunos',
-      path: '/gerenciar-alunos',
-      icon: 'Users',
-      tooltip: 'Gerenciar clientes e assinaturas',
-      badge: 12
-    },
-    {
-      label: 'Treinos',
-      path: '/criar-treinos',
-      icon: 'Dumbbell',
-      tooltip: 'Criar e gerenciar treinos'
-    },
-    {
-      label: 'Exercícios',
-      path: '/exercise-library',
-      icon: 'Book',
-      tooltip: 'Biblioteca de exercícios'
-    },
-    {
-      label: 'Nutrição',
-      path: '/nutrition-management',
-      icon: 'Apple',
-      tooltip: 'Planejamento nutricional'
-    },
-    {
-      label: 'Avaliações',
-      path: '/physical-assessment-system',
-      icon: 'FileText',
-      tooltip: 'Acompanhamento e progresso'
-    },
-    {
-      label: 'Mensagens',
-      path: '/chat-communication-hub',
-      icon: 'MessageSquare',
-      tooltip: 'Comunicação com clientes',
-      badge: 5
-    },
-    {
-      label: 'Relatórios',
-      path: '/relatorios',
-      icon: 'BarChart3',
-      tooltip: 'Analytics e relatórios'
-    },
-    {
-      label: 'Configurações',
-      path: '/configuracoes',
-      icon: 'Settings',
-      tooltip: 'Configurações da conta'
-    }
-  ];
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadMenus = async () => {
+      setLoadingMenus(true);
+      try {
+        const { data, error } = await DatabaseService.getMenus();
+        if (error) {
+          console.warn('Menu fetch error:', error);
+        }
+        if (isMounted && Array.isArray(data) && data.length) {
+          setMenuItems(data);
+        }
+      } catch (error) {
+        console.error('Menu load failed:', error);
+      } finally {
+        if (isMounted) {
+          setLoadingMenus(false);
+        }
+      }
+    };
+
+    loadMenus();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleNavigation = (path) => {
     navigate(path);
@@ -169,8 +146,12 @@ const Sidebar = ({ isOpen = false, onClose }) => {
                 <Icon name="User" size={12} color="white" />
               </div>
               <div>
-                <p className="text-sm font-medium text-foreground">Personal Trainer</p>
-                <p className="text-xs text-muted-foreground">João Silva</p>
+                <p className="text-sm font-medium text-foreground">
+                  {user?.full_name || user?.email || 'Usuário CapiFit'}
+                </p>
+                <p className="text-xs text-muted-foreground capitalize">
+                  {user?.role || 'trainer'}
+                </p>
               </div>
             </div>
           </div>
@@ -178,7 +159,7 @@ const Sidebar = ({ isOpen = false, onClose }) => {
 
         {/* Navigation */}
         <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
-          {menuItems?.map((item) => (
+          {(loadingMenus ? fallbackMenus : menuItems)?.map((item) => (
             <div key={item?.path} className="relative group">
               <button
                 onClick={() => handleNavigation(item?.path)}

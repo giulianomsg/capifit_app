@@ -1,243 +1,224 @@
 const express = require('express');
+const { query } = require('../lib/db');
+const { buildWhereClause, buildOrderByClause, buildLimitClause } = require('../lib/query-builder');
+const parseQueryOptions = require('../middleware/parseQueryOptions');
+const authMiddleware = require('../middleware/auth');
 
 const router = express.Router();
 
-// Mock data for workouts (replace with database queries)
-const mockWorkouts = [
-  {
-    id: 1,
-    name: 'Treino de Peito e Tríceps',
-    description: 'Treino focado em peitorais e tríceps',
-    trainer_id: 2,
-    client_id: 1,
-    exercises: [
-      { name: 'Supino Reto', sets: 4, reps: '8-12', weight: '70kg' },
-      { name: 'Supino Inclinado', sets: 3, reps: '10-12', weight: '60kg' },
-      { name: 'Tríceps Testa', sets: 3, reps: '12-15', weight: '30kg' }
-    ],
-    status: 'active',
-    created_at: '2024-10-25'
-  },
-  {
-    id: 2,
-    name: 'Treino de Costas e Bíceps',
-    description: 'Treino focado em dorsais e bíceps',
-    trainer_id: 2,
-    client_id: 1,
-    exercises: [
-      { name: 'Puxada Frontal', sets: 4, reps: '8-10', weight: '50kg' },
-      { name: 'Remada Curvada', sets: 3, reps: '10-12', weight: '40kg' },
-      { name: 'Rosca Direta', sets: 3, reps: '12-15', weight: '15kg' }
-    ],
-    status: 'active',
-    created_at: '2024-10-24'
-  }
-];
+function sanitizeWorkout(record) {
+  return {
+    id: record.id,
+    trainer_id: record.trainer_id,
+    client_id: record.client_id,
+    name: record.name,
+    description: record.description,
+    exercises: record.exercises ? JSON.parse(record.exercises) : [],
+    scheduled_date: record.scheduled_date,
+    completed_at: record.completed_at,
+    status: record.status,
+    notes: record.notes,
+    created_at: record.created_at,
+  };
+}
 
-const parseJSONParam = (value) => {
-  if (!value) return undefined;
+router.use(authMiddleware);
+
+router.get('/', parseQueryOptions, async (req, res) => {
   try {
-    return JSON.parse(value);
-  } catch (error) {
-    console.warn('Não foi possível interpretar parâmetro JSON:', value);
-    return undefined;
-  }
-};
-
-const matchesFilters = (entity, filters) => {
-  if (!filters || typeof filters !== 'object') return true;
-
-  return Object.entries(filters).every(([key, value]) => {
-    if (key === '$or' && Array.isArray(value)) {
-      return value.some((condition) => matchesFilters(entity, condition));
+    const baseWhere = {};
+    if (req.query.client_id) {
+      baseWhere.client_id = req.query.client_id;
+    }
+    if (req.query.trainer_id) {
+      baseWhere.trainer_id = req.query.trainer_id;
+    }
+    if (req.query.status) {
+      baseWhere.status = req.query.status;
     }
 
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-      if (value?.$in && Array.isArray(value.$in)) {
-        return value.$in.includes(entity[key]);
-      }
+    const limitValue = Number.isFinite(req.queryOptions.limit) ? Number(req.queryOptions.limit) : undefined;
+    const offsetValue = Number.isFinite(req.queryOptions.offset) ? Number(req.queryOptions.offset) : undefined;
 
-      if (value?.$eq !== undefined) {
-        return entity[key] === value.$eq;
-      }
+    const options = {
+      where: req.queryOptions.where,
+      orderBy: Object.keys(req.queryOptions.orderBy).length ? req.queryOptions.orderBy : { created_at: 'desc' },
+      limit: limitValue,
+      offset: offsetValue,
+    };
 
-      return Object.entries(value).every(([, nestedValue]) => entity[key] === nestedValue);
-    }
+    const values = [];
+    const whereClause = buildWhereClause({ ...baseWhere, ...options.where }, values);
+    const orderClause = buildOrderByClause(options.orderBy);
+    const limitClause = buildLimitClause(options.limit, options.offset);
 
-    return entity[key] === value;
-  });
-};
+    const filters = whereClause ? `WHERE ${whereClause}` : '';
 
-// Get all workouts
-router.get('/', (req, res) => {
-  try {
-    const { client_id, trainer_id, status, page = 1, limit = 10, where, orderBy } = req.query;
+    const listSql = `
+      SELECT id, trainer_id, client_id, name, description, exercises, scheduled_date,
+             completed_at, status, notes, created_at
+      FROM workouts
+      ${filters}
+      ${orderClause}
+      ${limitClause}
+    `;
 
-    let filteredWorkouts = [...mockWorkouts];
+    const countSql = `SELECT COUNT(*) as total FROM workouts ${filters}`;
 
-    const parsedWhere = parseJSONParam(where);
-    const parsedOrder = parseJSONParam(orderBy);
+    const [listResult, countResult] = await Promise.all([
+      query(listSql, values),
+      query(countSql, values),
+    ]);
 
-    if (parsedWhere) {
-      filteredWorkouts = filteredWorkouts.filter((workout) => matchesFilters(workout, parsedWhere));
-    }
-
-    if (client_id) {
-      filteredWorkouts = filteredWorkouts.filter((workout) => workout?.client_id === parseInt(client_id, 10));
-    }
-
-    if (trainer_id) {
-      filteredWorkouts = filteredWorkouts.filter((workout) => workout?.trainer_id === parseInt(trainer_id, 10));
-    }
-
-    if (status) {
-      filteredWorkouts = filteredWorkouts.filter((workout) => workout?.status === status);
-    }
-
-    if (parsedOrder && parsedOrder?.created_at) {
-      const direction = String(parsedOrder.created_at).toLowerCase() === 'asc' ? 1 : -1;
-      filteredWorkouts.sort((a, b) => a.created_at.localeCompare(b.created_at) * direction);
-    }
-
-    const numericLimit = Number(limit) || 10;
-    const numericPage = Number(page) || 1;
-    const startIndex = (numericPage - 1) * numericLimit;
-    const endIndex = startIndex + numericLimit;
-    const paginatedWorkouts = filteredWorkouts.slice(startIndex, endIndex);
+    const rows = listResult?.[0] || [];
+    const countRows = countResult?.[0] || [];
+    const workouts = rows.map(sanitizeWorkout);
+    const total = countRows?.[0]?.total || 0;
 
     res.json({
-      workouts: paginatedWorkouts,
+      workouts,
       pagination: {
-        currentPage: numericPage,
-        totalPages: Math.ceil(filteredWorkouts.length / numericLimit) || 1,
-        totalWorkouts: filteredWorkouts.length,
-        hasNext: endIndex < filteredWorkouts.length,
-        hasPrev: startIndex > 0,
+        total,
+        limit: typeof limitValue === 'number' ? limitValue : workouts.length,
+        offset: typeof offsetValue === 'number' ? offsetValue : 0,
       },
     });
   } catch (error) {
     console.error('Get workouts error:', error);
-    res.status(500).json({
-      error: 'Erro ao buscar treinos',
-    });
+    res.status(500).json({ message: 'Erro ao buscar treinos' });
   }
 });
 
-// Get workout by ID
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
-    const { id } = req.params;
-    const workout = mockWorkouts.find((w) => w?.id === parseInt(id, 10));
+    const [rows] = await query('SELECT * FROM workouts WHERE id = ? LIMIT 1', [req.params.id]);
+    const workout = rows?.[0];
 
     if (!workout) {
-      return res.status(404).json({
-        error: 'Treino não encontrado',
-      });
+      return res.status(404).json({ message: 'Treino não encontrado' });
     }
 
-    res.json({ workout });
-
+    res.json({ workout: sanitizeWorkout(workout) });
   } catch (error) {
     console.error('Get workout error:', error);
-    res.status(500).json({
-      error: 'Erro ao buscar treino',
-    });
+    res.status(500).json({ message: 'Erro ao buscar treino' });
   }
 });
 
-// Create new workout
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
-    const { name, description, trainer_id, client_id, exercises } = req.body;
+    const { trainer_id, client_id, name, description, exercises, scheduled_date, status = 'scheduled', notes } = req.body || {};
 
-    if (!name || !trainer_id || !client_id) {
-      return res.status(400).json({
-        error: 'Nome, ID do treinador e ID do cliente são obrigatórios',
-      });
+    if (!trainer_id || !client_id || !name) {
+      return res.status(400).json({ message: 'Treinador, cliente e nome são obrigatórios' });
     }
 
-    const newWorkout = {
-      id: mockWorkouts.length + 1,
+    const payload = {
+      trainer_id,
+      client_id,
       name,
       description: description || '',
-      trainer_id: parseInt(trainer_id, 10),
-      client_id: parseInt(client_id, 10),
-      exercises: exercises || [],
-      status: 'active',
-      created_at: new Date().toISOString().split('T')?.[0],
+      exercises: JSON.stringify(exercises || []),
+      scheduled_date: scheduled_date || null,
+      status,
+      notes: notes || null,
     };
 
-    mockWorkouts.push(newWorkout);
+    const insertSql = `
+      INSERT INTO workouts (id, trainer_id, client_id, name, description, exercises, scheduled_date, status, notes)
+      VALUES (UUID(), ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
 
-    res.status(201).json({
-      message: 'Treino criado com sucesso',
-      workout: newWorkout,
-    });
+    await query(insertSql, [
+      payload.trainer_id,
+      payload.client_id,
+      payload.name,
+      payload.description,
+      payload.exercises,
+      payload.scheduled_date,
+      payload.status,
+      payload.notes,
+    ]);
 
+    const [createdRows] = await query(
+      `SELECT * FROM workouts WHERE trainer_id = ? AND client_id = ? ORDER BY created_at DESC LIMIT 1`,
+      [payload.trainer_id, payload.client_id]
+    );
+
+    res.status(201).json({ workout: sanitizeWorkout(createdRows?.[0]) });
   } catch (error) {
     console.error('Create workout error:', error);
-    res.status(500).json({
-      error: 'Erro ao criar treino',
-    });
+    res.status(500).json({ message: 'Erro ao criar treino' });
   }
 });
 
-// Update workout
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
-    const { id } = req.params;
-    const { name, description, exercises, status } = req.body;
+    const { name, description, exercises, status, scheduled_date, completed_at, notes } = req.body || {};
+    const updates = [];
+    const values = [];
 
-    const workoutIndex = mockWorkouts.findIndex((w) => w?.id === parseInt(id, 10));
-
-    if (workoutIndex === -1) {
-      return res.status(404).json({
-        error: 'Treino não encontrado',
-      });
+    if (name !== undefined) {
+      updates.push('name = ?');
+      values.push(name);
+    }
+    if (description !== undefined) {
+      updates.push('description = ?');
+      values.push(description);
+    }
+    if (exercises !== undefined) {
+      updates.push('exercises = ?');
+      values.push(JSON.stringify(exercises || []));
+    }
+    if (status !== undefined) {
+      updates.push('status = ?');
+      values.push(status);
+    }
+    if (scheduled_date !== undefined) {
+      updates.push('scheduled_date = ?');
+      values.push(scheduled_date);
+    }
+    if (completed_at !== undefined) {
+      updates.push('completed_at = ?');
+      values.push(completed_at);
+    }
+    if (notes !== undefined) {
+      updates.push('notes = ?');
+      values.push(notes);
     }
 
-    // Update workout data
-    if (name) mockWorkouts[workoutIndex].name = name;
-    if (description) mockWorkouts[workoutIndex].description = description;
-    if (exercises) mockWorkouts[workoutIndex].exercises = exercises;
-    if (status) mockWorkouts[workoutIndex].status = status;
+    if (!updates.length) {
+      return res.status(400).json({ message: 'Nenhuma alteração fornecida' });
+    }
 
-    res.json({
-      message: 'Treino atualizado com sucesso',
-      workout: mockWorkouts?.[workoutIndex],
-    });
+    values.push(req.params.id);
 
+    const [result] = await query(`UPDATE workouts SET ${updates.join(', ')} WHERE id = ?`, values);
+
+    if (result.affectedRows === 0 && result.rowCount === 0) {
+      return res.status(404).json({ message: 'Treino não encontrado' });
+    }
+
+    const [rows] = await query('SELECT * FROM workouts WHERE id = ? LIMIT 1', [req.params.id]);
+    res.json({ workout: sanitizeWorkout(rows?.[0]) });
   } catch (error) {
     console.error('Update workout error:', error);
-    res.status(500).json({
-      error: 'Erro ao atualizar treino',
-    });
+    res.status(500).json({ message: 'Erro ao atualizar treino' });
   }
 });
 
-// Delete workout
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
-    const { id } = req.params;
-    const workoutIndex = mockWorkouts.findIndex((w) => w?.id === parseInt(id, 10));
+    const [result] = await query('DELETE FROM workouts WHERE id = ?', [req.params.id]);
 
-    if (workoutIndex === -1) {
-      return res.status(404).json({
-        error: 'Treino não encontrado',
-      });
+    if (result.affectedRows === 0 && result.rowCount === 0) {
+      return res.status(404).json({ message: 'Treino não encontrado' });
     }
 
-    mockWorkouts.splice(workoutIndex, 1);
-
-    res.json({
-      message: 'Treino removido com sucesso',
-    });
-
+    res.json({ message: 'Treino removido com sucesso' });
   } catch (error) {
     console.error('Delete workout error:', error);
-    res.status(500).json({
-      error: 'Erro ao remover treino',
-    });
+    res.status(500).json({ message: 'Erro ao remover treino' });
   }
 });
 
