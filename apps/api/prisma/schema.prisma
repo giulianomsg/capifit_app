@@ -1,0 +1,64 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Trainer {
+  id        Int                     @id @default(autoincrement())
+  name      String
+  email     String                  @unique
+  createdAt DateTime                @default(now())
+  updatedAt DateTime                @updatedAt
+  profiles  TrainerClientProfile[]
+}
+
+model Client {
+  id        Int                     @id @default(autoincrement())
+  name      String
+  email     String                  @unique
+  phone     String?
+  createdAt DateTime                @default(now())
+  updatedAt DateTime                @updatedAt
+  profiles  TrainerClientProfile[]
+}
+
+model TrainerClientProfile {
+  id               Int          @id @default(autoincrement())
+  trainerId        Int
+  clientId         Int
+  goals            String?
+  injuries         String?
+  preferences      String?
+  status           ProfileStatus @default(ACTIVE)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  trainer          Trainer       @relation(fields: [trainerId], references: [id])
+  client           Client        @relation(fields: [clientId], references: [id])
+  auditTrailEvents AuditTrail[]
+
+  @@unique([trainerId, clientId])
+}
+
+enum ProfileStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+model AuditTrail {
+  id           Int       @id @default(autoincrement())
+  entity       String
+  entityId     Int
+  action       String
+  changes      Json?
+  performedBy  String?
+  createdAt    DateTime  @default(now())
+  profile      TrainerClientProfile? @relation(fields: [profileId], references: [id])
+  profileId    Int?
+
+  @@index([entity, entityId])
+}
