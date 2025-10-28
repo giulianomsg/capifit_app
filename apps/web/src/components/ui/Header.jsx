@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../../contexts/AuthContext';
 import Icon from '../AppIcon';
 import Button from './Button';
+import Image from '../AppImage';
 
 const Header = ({ onMenuToggle, isMenuOpen = false }) => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const { user, logout } = useAuth();
 
@@ -59,8 +61,16 @@ const Header = ({ onMenuToggle, isMenuOpen = false }) => {
 
           <div className="relative">
             <Button variant="ghost" onClick={handleUserMenuToggle} className="flex items-center space-x-2 px-3">
-              <div className="w-8 h-8 bg-secondary rounded-full flex items-center justify-center">
-                <Icon name="User" size={16} color="white" />
+              <div className="w-8 h-8 rounded-full overflow-hidden bg-secondary flex items-center justify-center">
+                {user?.avatarUrl ? (
+                  <Image
+                    src={user.avatarUrl}
+                    alt={`Avatar de ${user.name ?? 'usuário'}`}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <Icon name="User" size={16} color="white" />
+                )}
               </div>
               <span className="hidden md:block text-sm font-medium text-foreground">
                 {user?.name ?? 'Usuário'}
@@ -83,7 +93,10 @@ const Header = ({ onMenuToggle, isMenuOpen = false }) => {
 
                 <div className="py-1">
                   <button
-                    onClick={() => setShowUserMenu(false)}
+                    onClick={() => {
+                      navigate('/perfil-do-personal');
+                      setShowUserMenu(false);
+                    }}
                     className="w-full flex items-center px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors"
                   >
                     <Icon name="User" size={16} className="mr-3" />

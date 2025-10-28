@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet';
+import { useMutation } from '@tanstack/react-query';
 import Icon from '../../components/AppIcon';
 import Button from '../../components/ui/Button';
 import Header from '../../components/ui/Header';
 import Sidebar from '../../components/ui/Sidebar';
+import { useAuth } from '../../contexts/AuthContext';
+import { updateUser, uploadUserAvatar } from '../../services/userService';
 
 // Import all components
 import ProfilePhotoUpload from './components/ProfilePhotoUpload';
@@ -15,9 +18,53 @@ import PortfolioTab from './components/PortfolioTab';
 import ProfileVisibilitySettings from './components/ProfileVisibilitySettings';
 
 const PerfilDoPersonal = () => {
+  const { user, refreshProfile } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('personal-info');
-  const [profilePhoto, setProfilePhoto] = useState(null);
+  const [feedback, setFeedback] = useState(null);
+
+  const avatarMutation = useMutation({
+    mutationFn: (file) => {
+      if (!user?.id) {
+        throw new Error('Usuário não autenticado');
+      }
+      return uploadUserAvatar(user.id, file);
+    },
+    onSuccess: () => {
+      setFeedback({ type: 'success', message: 'Foto de perfil atualizada com sucesso.' });
+      refreshProfile().catch(() => undefined);
+    },
+    onError: (error) => {
+      const message = error?.response?.data?.message ?? 'Não foi possível atualizar a foto de perfil.';
+      setFeedback({ type: 'error', message });
+    },
+  });
+
+  const infoMutation = useMutation({
+    mutationFn: (payload) => {
+      if (!user?.id) {
+        throw new Error('Usuário não autenticado');
+      }
+      return updateUser(user.id, payload);
+    },
+    onSuccess: () => {
+      setFeedback({ type: 'success', message: 'Informações pessoais atualizadas.' });
+      refreshProfile().catch(() => undefined);
+    },
+    onError: (error) => {
+      const message = error?.response?.data?.message ?? 'Não foi possível salvar as informações.';
+      setFeedback({ type: 'error', message });
+    },
+  });
+
+  const personalInfo = useMemo(
+    () => ({
+      nome: user?.name ?? '',
+      email: user?.email ?? '',
+      telefone: user?.phone ?? '',
+    }),
+    [user?.email, user?.name, user?.phone],
+  );
 
   const tabs = [
     {
@@ -63,7 +110,20 @@ const PerfilDoPersonal = () => {
   };
 
   const handlePhotoChange = (file) => {
-    setProfilePhoto(file);
+    if (!file) {
+      return;
+    }
+    setFeedback(null);
+    avatarMutation.mutate(file);
+  };
+
+  const handleSavePersonalInfo = async (formData) => {
+    setFeedback(null);
+    await infoMutation.mutateAsync({
+      name: formData?.nome,
+      email: formData?.email,
+      phone: formData?.telefone,
+    });
   };
 
   const renderTabContent = () => {
@@ -72,10 +132,13 @@ const PerfilDoPersonal = () => {
         return (
           <div className="space-y-8">
             <ProfilePhotoUpload
-              currentPhoto={profilePhoto}
+              currentPhoto={user?.avatarUrl ?? ''}
               onPhotoChange={handlePhotoChange}
+              isUploading={avatarMutation.isPending}
+              errorMessage={feedback?.type === 'error' ? feedback.message : ''}
+              allowRemove={false}
             />
-            <PersonalInfoForm />
+            <PersonalInfoForm initialData={personalInfo} onSave={handleSavePersonalInfo} />
           </div>
         );
       case 'credentials':
@@ -149,6 +212,12 @@ const PerfilDoPersonal = () => {
               </div>
 
               {/* Progress Indicator */}
+              {feedback && feedback.type === 'success' && (
+                <div className="mb-6 rounded-lg border border-success/40 bg-success/10 p-4 text-success">
+                  {feedback.message}
+                </div>
+              )}
+
               <div className="bg-card border border-border rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium text-foreground">

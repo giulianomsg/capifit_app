@@ -48,6 +48,8 @@ services:
       - redis
     ports:
       - '3001:3001'
+    volumes:
+      - api_storage:/app/storage
 
   web:
     build:
@@ -60,3 +62,4 @@ services:
 
 volumes:
   postgres_data:
+  api_storage:

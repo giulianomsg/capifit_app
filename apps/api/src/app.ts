@@ -12,6 +12,7 @@ import { env } from '@config/env';
 import { router } from '@routes/index';
 import { errorHandler } from '@middlewares/error-handler';
 import { logger } from '@utils/logger';
+import { storage } from '@lib/storage';
 
 const rateLimiter = new RateLimiterMemory({
   points: env.RATE_LIMIT_MAX,
@@ -55,6 +56,8 @@ app.use(
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('combined'));
+
+app.use('/uploads', express.static(storage.baseDir, { maxAge: '1d', immutable: true }));
 
 app.use((req, res, next) => {
   rateLimiter

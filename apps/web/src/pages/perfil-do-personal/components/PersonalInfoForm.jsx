@@ -1,24 +1,33 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Input from '../../../components/ui/Input';
 import Select from '../../../components/ui/Select';
 import Button from '../../../components/ui/Button';
 
-const PersonalInfoForm = ({ initialData = {}, onSave, className = "" }) => {
+const PersonalInfoForm = ({ initialData = {}, onSave, className = '' }) => {
   const [formData, setFormData] = useState({
-    nome: initialData?.nome || 'João Silva',
-    email: initialData?.email || 'joao.silva@fittrainer.com',
-    telefone: initialData?.telefone || '(11) 99999-9999',
-    cpf: initialData?.cpf || '123.456.789-00',
-    dataNascimento: initialData?.dataNascimento || '1985-03-15',
-    genero: initialData?.genero || 'masculino',
-    endereco: initialData?.endereco || 'Rua das Flores, 123',
-    cidade: initialData?.cidade || 'São Paulo',
-    estado: initialData?.estado || 'SP',
-    cep: initialData?.cep || '01234-567',
-    especialidades: initialData?.especialidades || 'Musculação, Funcional',
-    biografia: initialData?.biografia || 'Personal trainer especializado em treinamento funcional e musculação com mais de 8 anos de experiência.',
-    ...initialData
+    nome: initialData?.nome ?? '',
+    email: initialData?.email ?? '',
+    telefone: initialData?.telefone ?? '',
+    cpf: initialData?.cpf ?? '',
+    dataNascimento: initialData?.dataNascimento ?? '',
+    genero: initialData?.genero ?? 'masculino',
+    endereco: initialData?.endereco ?? '',
+    cidade: initialData?.cidade ?? '',
+    estado: initialData?.estado ?? 'SP',
+    cep: initialData?.cep ?? '',
+    especialidades: initialData?.especialidades ?? '',
+    biografia: initialData?.biografia ?? '',
   });
+
+  useEffect(() => {
+    setFormData((prev) => ({
+      ...prev,
+      ...initialData,
+      nome: initialData?.nome ?? prev.nome ?? '',
+      email: initialData?.email ?? prev.email ?? '',
+      telefone: initialData?.telefone ?? prev.telefone ?? '',
+    }));
+  }, [initialData]);
 
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
@@ -106,14 +115,7 @@ const PersonalInfoForm = ({ initialData = {}, onSave, className = "" }) => {
     setIsLoading(true);
     
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      if (onSave) {
-        onSave(formData);
-      }
-      
-      console.log('Dados salvos:', formData);
+      await onSave?.(formData);
     } catch (error) {
       console.error('Erro ao salvar:', error);
     } finally {

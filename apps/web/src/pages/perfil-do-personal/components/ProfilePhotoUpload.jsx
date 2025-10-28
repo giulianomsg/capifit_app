@@ -1,156 +1,164 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+
 import Icon from '../../../components/AppIcon';
 import Image from '../../../components/AppImage';
 import Button from '../../../components/ui/Button';
 
-const ProfilePhotoUpload = ({ currentPhoto, onPhotoChange, className = "" }) => {
+const ProfilePhotoUpload = ({
+  currentPhoto,
+  onPhotoChange,
+  isUploading = false,
+  errorMessage = '',
+  allowRemove = true,
+  className = '',
+}) => {
   const [isDragging, setIsDragging] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState(currentPhoto);
+  const [previewUrl, setPreviewUrl] = useState(currentPhoto ?? null);
+
+  useEffect(() => {
+    setPreviewUrl(currentPhoto ?? null);
+  }, [currentPhoto]);
 
   const handleFileSelect = (file) => {
-    if (file && file?.type?.startsWith('image/')) {
-      const url = URL.createObjectURL(file);
-      setPreviewUrl(url);
-      if (onPhotoChange) {
-        onPhotoChange(file);
-      }
+    if (!file || !file?.type?.startsWith('image/')) {
+      return;
     }
+
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+    onPhotoChange?.(file);
   };
 
-  const handleDrop = (e) => {
-    e?.preventDefault();
+  const handleDrop = (event) => {
+    event?.preventDefault();
     setIsDragging(false);
-    const file = e?.dataTransfer?.files?.[0];
+    const file = event?.dataTransfer?.files?.[0];
     handleFileSelect(file);
   };
 
-  const handleDragOver = (e) => {
-    e?.preventDefault();
+  const handleDragOver = (event) => {
+    event?.preventDefault();
     setIsDragging(true);
   };
 
-  const handleDragLeave = (e) => {
-    e?.preventDefault();
+  const handleDragLeave = (event) => {
+    event?.preventDefault();
     setIsDragging(false);
   };
 
-  const handleFileInput = (e) => {
-    const file = e?.target?.files?.[0];
+  const handleFileInput = (event) => {
+    const file = event?.target?.files?.[0];
     handleFileSelect(file);
+    if (event?.target) {
+      event.target.value = '';
+    }
   };
 
   const handleRemovePhoto = () => {
     setPreviewUrl(null);
-    if (onPhotoChange) {
-      onPhotoChange(null);
-    }
+    onPhotoChange?.(null);
   };
 
   return (
     <div className={`space-y-4 ${className}`}>
       <div className="text-center">
-        <h3 className="text-lg font-semibold text-foreground mb-2">
-          Foto Profissional
-        </h3>
-        <p className="text-sm text-muted-foreground">
-          Adicione uma foto profissional para seu perfil público
-        </p>
+        <h3 className="text-lg font-semibold text-foreground mb-2">Foto Profissional</h3>
+        <p className="text-sm text-muted-foreground">Adicione uma foto profissional para seu perfil público</p>
       </div>
+
       <div className="flex flex-col items-center space-y-4">
-        {/* Photo Preview */}
         <div className="relative">
           <div className="w-32 h-32 rounded-full overflow-hidden bg-muted border-4 border-border">
             {previewUrl ? (
-              <Image
-                src={previewUrl}
-                alt="Foto de perfil do personal trainer profissional"
-                className="w-full h-full object-cover"
-              />
+              <Image src={previewUrl} alt="Foto de perfil" className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
                 <Icon name="User" size={48} className="text-muted-foreground" />
               </div>
             )}
           </div>
-          
-          {previewUrl && (
+
+          {isUploading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+              <Icon name="Loader2" size={24} className="text-white animate-spin" />
+            </div>
+          )}
+
+          {previewUrl && allowRemove && (
             <Button
               variant="destructive"
               size="icon"
               onClick={handleRemovePhoto}
               className="absolute -top-2 -right-2 w-8 h-8 rounded-full"
+              disabled={isUploading}
             >
               <Icon name="X" size={16} />
             </Button>
           )}
         </div>
 
-        {/* Upload Area */}
         <div
           className={`
             w-full max-w-md p-6 border-2 border-dashed rounded-lg text-center cursor-pointer
             transition-colors duration-200
-            ${isDragging 
-              ? 'border-primary bg-primary/5' :'border-border hover:border-primary hover:bg-muted/50'
-            }
+            ${isDragging ? 'border-primary bg-primary/5' : 'border-border hover:border-primary hover:bg-muted/50'}
+            ${isUploading ? 'pointer-events-none opacity-75' : ''}
           `}
           onDrop={handleDrop}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
-          onClick={() => document.getElementById('photo-upload')?.click()}
+          onClick={() => document.getElementById('photo-upload-input')?.click()}
         >
           <Icon name="Upload" size={32} className="mx-auto mb-3 text-muted-foreground" />
-          <p className="text-sm font-medium text-foreground mb-1">
-            Clique para fazer upload ou arraste uma imagem
-          </p>
-          <p className="text-xs text-muted-foreground">
-            PNG, JPG até 5MB
-          </p>
+          <p className="text-sm font-medium text-foreground mb-1">Clique para fazer upload ou arraste uma imagem</p>
+          <p className="text-xs text-muted-foreground">PNG, JPG ou WEBP até 5MB</p>
         </div>
 
         <input
-          id="photo-upload"
+          id="photo-upload-input"
           type="file"
           accept="image/*"
           onChange={handleFileInput}
           className="hidden"
+          disabled={isUploading}
         />
 
-        {/* Action Buttons */}
         <div className="flex space-x-3">
           <Button
             variant="outline"
             size="sm"
-            onClick={() => document.getElementById('photo-upload')?.click()}
+            onClick={() => document.getElementById('photo-upload-input')?.click()}
             iconName="Upload"
             iconPosition="left"
+            disabled={isUploading}
           >
             Escolher Arquivo
           </Button>
-          
-          {previewUrl && (
+
+          {previewUrl && allowRemove && (
             <Button
               variant="ghost"
               size="sm"
               onClick={handleRemovePhoto}
               iconName="Trash2"
               iconPosition="left"
+              disabled={isUploading}
             >
               Remover
             </Button>
           )}
         </div>
+
+        {errorMessage && <p className="text-sm text-destructive">{errorMessage}</p>}
       </div>
-      {/* Guidelines */}
+
       <div className="bg-muted/30 p-4 rounded-lg">
-        <h4 className="text-sm font-medium text-foreground mb-2">
-          Dicas para uma boa foto:
-        </h4>
+        <h4 className="text-sm font-medium text-foreground mb-2">Dicas para uma boa foto:</h4>
         <ul className="text-xs text-muted-foreground space-y-1">
           <li>• Use uma foto recente e profissional</li>
-          <li>• Mantenha boa iluminação e fundo neutro</li>
-          <li>• Evite fotos com outras pessoas</li>
-          <li>• Resolução mínima de 400x400 pixels</li>
+          <li>• Prefira ambientes bem iluminados</li>
+          <li>• Evite fundos com outras pessoas</li>
+          <li>• Recomendado 400x400 pixels ou superior</li>
         </ul>
       </div>
     </div>

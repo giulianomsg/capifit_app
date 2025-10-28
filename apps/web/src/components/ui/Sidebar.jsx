@@ -17,6 +17,8 @@ const Sidebar = ({ isOpen = false, onClose }) => {
     return null;
   }
 
+  const isAdmin = user?.roles?.includes('admin');
+
   const menuItems = [
     { label: 'Dashboard', path: '/dashboard-principal', icon: 'LayoutDashboard', tooltip: 'Visão geral e métricas principais' },
     { label: 'Perfil', path: '/perfil-do-personal', icon: 'User', tooltip: 'Gerenciar perfil profissional' },
@@ -29,6 +31,15 @@ const Sidebar = ({ isOpen = false, onClose }) => {
     { label: 'Relatórios', path: '/relatorios', icon: 'BarChart3', tooltip: 'Analytics e relatórios' },
     { label: 'Configurações', path: '/configuracoes', icon: 'Settings', tooltip: 'Configurações da conta' },
   ];
+
+  if (isAdmin) {
+    menuItems.splice(2, 0, {
+      label: 'Usuários',
+      path: '/user-management',
+      icon: 'ShieldCheck',
+      tooltip: 'Gerenciar equipe e acessos',
+    });
+  }
 
   const handleNavigation = (path) => {
     navigate(path);

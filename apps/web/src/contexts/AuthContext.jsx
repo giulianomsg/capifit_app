@@ -62,6 +62,19 @@ export function AuthProvider({ children }) {
     return undefined;
   }, []);
 
+  const refreshProfile = useCallback(async () => {
+    const session = loadSession();
+    if (!session.token) {
+      throw new Error('No active session');
+    }
+
+    const profile = await fetchProfile();
+    setUser(profile);
+    persistSession({ token: session.token, user: profile });
+    setStatus('authenticated');
+    return profile;
+  }, []);
+
   const handleLogin = useCallback(async (credentials) => {
     setStatus('loading');
     setError(null);
@@ -117,9 +130,10 @@ export function AuthProvider({ children }) {
       login: handleLogin,
       register: handleRegister,
       logout: handleLogout,
+      refreshProfile,
       isAuthenticated: status === 'authenticated',
     }),
-    [error, handleLogin, handleLogout, handleRegister, status, user],
+    [error, handleLogin, handleLogout, handleRegister, refreshProfile, status, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

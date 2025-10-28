@@ -10,6 +10,7 @@ import {
   revokeToken,
 } from '@services/auth-service';
 import { env } from '@config/env';
+import { getCurrentUser } from '@services/user-service';
 
 const registerSchema = z.object({
   name: z.string().min(2).max(120),
@@ -124,9 +125,11 @@ authRouter.post('/logout', authenticateRefreshToken, async (req, res, next) => {
   }
 });
 
-authRouter.get('/me', requireAuth, (req, res) => {
-  if (!req.user) {
-    throw createHttpError(401, 'Authentication required');
+authRouter.get('/me', requireAuth, async (req, res, next) => {
+  try {
+    const user = await getCurrentUser({ user: req.user });
+    res.json({ user });
+  } catch (error) {
+    next(error);
   }
-  res.json({ user: req.user });
 });

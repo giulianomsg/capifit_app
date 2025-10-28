@@ -8,6 +8,7 @@ CapiFit is a full-stack platform that empowers personal trainers to manage clien
 - **PostgreSQL + Prisma** data layer with migrations, seeds, hashed refresh tokens and audit trail primitives.
 - **React 18 + Vite** frontend, React Query powered session management, guarded routes and axios interceptors with automatic refresh.
 - **Production-ready tooling**: Docker Compose stack (PostgreSQL, Redis, API, Web), PM2 ecosystem file, structured logging, rate limiting, Helmet and CORS hardening.
+- **User management suite**: Admin REST endpoints and React screens for inviting, editing and deactivating accounts with role-aware RBAC and secure avatar uploads.
 - **Testing foundation**: Vitest + Supertest API tests validating authentication flows and error handling.
 
 ## 🧱 Project Structure
@@ -47,6 +48,8 @@ CapiFit is a full-stack platform that empowers personal trainers to manage clien
    npm install
    ```
 
+   > ℹ️ If your environment enforces an internal npm proxy, ensure packages such as `@prisma/client` and `pg-mem` are whitelisted; otherwise `npm install` may fail with `403 Forbidden` responses.
+
 2. **Copy environment files**
    ```bash
    cp apps/api/.env.example apps/api/.env
@@ -76,14 +79,14 @@ CapiFit is a full-stack platform that empowers personal trainers to manage clien
 ## 🧪 Testing & Linting
 
 ```bash
-npm run test:api      # Vitest + Supertest authentication coverage
+npm run test:api      # Vitest + Supertest integration coverage (auth + user management)
 npm run test:web      # Vitest placeholder (extend with UI tests)
 npm run lint          # Lint API + Web
 npm run lint:api
 npm run lint:web
 ```
 
-> **Note:** API tests mock the service layer to exercise Express validation and error handling without a live database. Extend with integration tests once infrastructure (Redis, email, etc.) is introduced.
+> **Note:** API tests boot an in-memory PostgreSQL instance (pg-mem) to exercise authentication and user management flows end-to-end without requiring Docker or an external database.
 
 ## 🏗️ Build & Production Commands
 
@@ -116,6 +119,7 @@ Services:
 - `redis`: Redis 7 (reserved for job queues / rate limiting)
 - `api`: Express API container (`apps/api/Dockerfile`)
 - `web`: Nginx static host + proxy for `/api` (`apps/web/Dockerfile`)
+- `api_storage`: named volume with uploaded assets mounted at `/app/storage`
 
 Frontend reachable at `http://localhost:8080`, API proxied under `/api`.
 
@@ -126,6 +130,7 @@ Frontend reachable at `http://localhost:8080`, API proxied under `/api`.
 - Prisma models for `users`, `roles`, `refresh_tokens`, `audit_logs` ready for expansion.
 - Structured logging via Pino, request correlation through `pino-http`.
 - Centralized error handler that differentiates developer vs user messages and returns 422 validation payloads.
+- Multer-based avatar upload pipeline with MIME validation, extension filtering and 5MB size cap (local disk driver included).
 
 ## 🗄️ Database & Seeding
 
@@ -135,10 +140,26 @@ Frontend reachable at `http://localhost:8080`, API proxied under `/api`.
 | `Role` / `UserRole` | RBAC assignments (admin, trainer, client) |
 | `RefreshToken` | Hashed refresh tokens with revocation / expiry tracking |
 | `AuditLog` | Future auditing trail for sensitive actions |
+| `ClientProfile` | Extended metrics for clients (subscription, goals, assessments) |
+| `TrainerClient` | Links trainers to their clients with status & metadata |
+| `Exercise` / `Workout*` / `SessionLog` | Exercise catalogue, workout builder blocks and execution logs |
 
 Initial migration `202501010001_init` builds the schema and triggers. Seeding (`npm run seed --workspace apps/api`) creates:
 - Roles: admin, trainer, client
 - Bootstrap admin user `admin@capifit.com` (password `ChangeMe123!` — change in production via `ADMIN_DEFAULT_PASSWORD` env)
+- Demo trainer with three connected clients, populated `ClientProfile` stats, workouts and exercise library entries.
+
+## 👥 User & Role Management
+
+- **API endpoints** under `/api/v1/users` implement pagination, search, role/status filters, creation, update, soft delete and avatar upload. Mutations require `admin`; `/me` and profile updates support self-service.
+- **React admin page** `/user-management` (visible only to admins) consumes the API with React Query, offering modals for create/edit, avatar uploader and pagination controls.
+- **Trainer profile** (`/perfil-do-personal`) now persists avatar changes and personal details, automatically refreshing the authenticated session.
+
+## 📸 File Storage
+
+- Default driver: `local`, writing to `apps/api/storage` (mounted as `api_storage` volume in Docker Compose).
+- Static URLs are exposed under `/uploads/*` with a one-day cache policy.
+- Driver hooks are centralized in `apps/api/src/lib/storage.ts`; implement the `s3` branch to integrate Amazon S3 or compatible services.
 
 ## 🌐 Environment Variables
 
@@ -156,6 +177,7 @@ Initial migration `202501010001_init` builds the schema and triggers. Seeding (`
 | `REDIS_URL` | Redis connection (reserved for queues/rate limiters) |
 | `SMTP_*` | Email provider configuration (future notifications) |
 | `FILE_STORAGE_DRIVER` | `local` or `s3` (uploads roadmap) |
+| `FILE_STORAGE_LOCAL_PATH` | Relative/absolute path for local storage (default `./storage`) |
 | `LOG_LEVEL` | Pino log level |
 | `RATE_LIMIT_WINDOW_MS` / `RATE_LIMIT_MAX` | Rate limiting window + quota |
 

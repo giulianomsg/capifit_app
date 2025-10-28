@@ -20,6 +20,7 @@ import WorkoutSessionTracking from './pages/workout-session-tracking';
 import ExerciseLibrary from './pages/exercise-library';
 import ClientProfileManagement from './pages/client-profile-management';
 import NotificationCenter from './pages/notification-center';
+import UserManagement from './pages/user-management';
 
 const Routes = () => {
   return (
@@ -46,6 +47,7 @@ const Routes = () => {
         <Route path="/exercise-library" element={<AuthGuard><ExerciseLibrary /></AuthGuard>} />
         <Route path="/client-profile-management/:clientId?" element={<AuthGuard><ClientProfileManagement /></AuthGuard>} />
         <Route path="/notification-center" element={<AuthGuard><NotificationCenter /></AuthGuard>} />
+        <Route path="/user-management" element={<AuthGuard><UserManagement /></AuthGuard>} />
         
         {/* Route aliases for broken navigation links */}
         <Route path="/planos-alimentares" element={<AuthGuard><NutritionManagement /></AuthGuard>} />
