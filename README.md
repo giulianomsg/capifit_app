@@ -16,8 +16,8 @@ Sistema completo para personal trainers com frontend em **React + Vite** e backe
 4. Configurar o banco de dados com os scripts SQL.
 5. Preencher os arquivos `.env` do frontend e backend.
 6. Instalar dependências (`npm install`) e gerar o build (`npm run build`).
-7. Iniciar a API com PM2 e configurar inicialização automática.
-8. Publicar o frontend com Nginx e habilitar HTTPS via Certbot.
+7. Executar o script `scripts/deploy/install_or_update.sh` para publicar o frontend, configurar Nginx e PM2.
+8. (Opcional) Emitir o certificado SSL via Certbot manualmente ou pela flag `REQUEST_CERT=true` no script.
 9. Validar endpoints, logs e agendar backups.
 
 Cada etapa detalhada está documentada abaixo.
@@ -186,6 +186,8 @@ pm2 save
 pm2 startup systemd -u $USER --hp $HOME
 ```
 
+> **Atalho:** o passo seguinte automatiza essa configuração com `scripts/deploy/install_or_update.sh`, então você pode pular esta etapa manual caso prefira usar o script diretamente.
+
 Verifique se está tudo ativo:
 ```bash
 pm2 status
@@ -199,84 +201,59 @@ curl http://localhost:3001/api/health
 
 ---
 
-## ✅ 10. Configurar o Nginx como Proxy Reverso
-Crie `/etc/nginx/sites-available/capifit` com o conteúdo abaixo:
-```nginx
-server {
-    listen 80;
-    server_name capifit.app.br www.capifit.app.br;
+## ✅ 10. Configurar Nginx e PM2 com o script de deploy
 
-    location /.well-known/acme-challenge/ {
-        root /var/www/capifit_app/dist;
-    }
+O repositório inclui:
 
-    location / {
-        return 301 https://$host$request_uri;
-    }
-}
+- Template Nginx em `config/nginx/capifit.app.br.conf` (baseado em HTTPS, assets com cache longo e proxy para `/api`).
+- Script automatizado em `scripts/deploy/install_or_update.sh` que instala pacotes, gera o build do frontend, substitui variáveis no template e (re)inicia o PM2.
 
-server {
-    listen 443 ssl http2;
-    server_name capifit.app.br www.capifit.app.br;
+Antes de executar, ajuste as variáveis de ambiente conforme sua infraestrutura:
 
-    ssl_certificate /etc/letsencrypt/live/capifit.app.br/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/capifit.app.br/privkey.pem;
+| Variável | Descrição | Padrão |
+| --- | --- | --- |
+| `DOMAIN` | Domínio principal (sem protocolo). | `capifit.app.br` |
+| `BACKEND_PORT` | Porta do backend Node.js/Express. | `3001` |
+| `BUILD_DIR` | Diretório onde ficará o build do frontend. | `/var/www/capifit_app/build` |
+| `PHP_FPM_SOCKET` | Socket PHP-FPM usado pelo phpMyAdmin opcional. | `/run/php/php8.3-fpm.sock` |
+| `REQUEST_CERT` | Quando `true`, executa `certbot --nginx` após gerar o site. | `false` |
+| `CERTBOT_EMAIL` | E-mail administrativo para o Certbot (usado se `REQUEST_CERT=true`). | `admin@${DOMAIN}` |
 
-    root /var/www/capifit_app/dist;
-    index index.html;
-
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-
-    location /api/ {
-        proxy_pass http://127.0.0.1:3001/;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
-    }
-
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header Referrer-Policy "no-referrer-when-downgrade" always;
-    add_header X-XSS-Protection "1; mode=block" always;
-
-    gzip on;
-    gzip_vary on;
-    gzip_min_length 1024;
-    gzip_types text/plain text/css text/xml text/javascript application/javascript application/json;
-}
-```
-
-Ative o site e reinicie:
+Execute o script (como `root` ou `sudo`):
 ```bash
-sudo ln -s /etc/nginx/sites-available/capifit /etc/nginx/sites-enabled/
-sudo rm /etc/nginx/sites-enabled/default
-sudo nginx -t
-sudo systemctl reload nginx
+cd /var/www/capifit_app
+sudo DOMAIN=capifit.app.br \
+     BACKEND_PORT=3001 \
+     BUILD_DIR=/var/www/capifit_app/build \
+     PHP_FPM_SOCKET=/run/php/php8.3-fpm.sock \
+     REQUEST_CERT=false \
+     ./scripts/deploy/install_or_update.sh
 ```
 
-> Se ainda não tiver certificado SSL, configure primeiro apenas o bloco `listen 80` e execute o Certbot (próxima etapa). Depois habilite o bloco HTTPS.
+O script realiza automaticamente:
+
+1. `apt-get update` e instalação de `nginx`, `certbot`, `php-fpm`, `php-mysql`.
+2. `npm ci` (ou `npm install`) seguido de `npm run build`.
+3. Substituição das variáveis no template e publicação em `/etc/nginx/sites-available/${DOMAIN}.conf` com link simbólico em `sites-enabled`.
+4. `nginx -t` e `systemctl reload nginx`.
+5. Instalação do `pm2` (se necessário), criação/recarga do processo `capifit-backend`, `pm2 save` e `pm2 startup`.
+
+Se quiser solicitar o certificado SSL automaticamente, defina `REQUEST_CERT=true` (o domínio precisa apontar para o servidor):
+```bash
+sudo REQUEST_CERT=true CERTBOT_EMAIL=seu-email@dominio.com ./scripts/deploy/install_or_update.sh
+```
+
+O script pode ser executado novamente sempre que houver atualizações de código; ele recompila o frontend e recarrega Nginx/PM2 de forma idempotente.
 
 ---
 
-## ✅ 11. Emitir Certificado SSL com Certbot
+## ✅ 11. (Opcional) Emitir Certificado SSL manualmente
+Caso não utilize a flag `REQUEST_CERT=true`, execute manualmente:
 ```bash
-sudo snap install core; sudo snap refresh core
-sudo snap install --classic certbot
-sudo ln -s /snap/bin/certbot /usr/bin/certbot
 sudo certbot --nginx -d capifit.app.br -d www.capifit.app.br
-sudo systemctl status snap.certbot.renew.timer
+sudo systemctl status certbot.timer || sudo systemctl status snap.certbot.renew.timer
 ```
-Certifique-se de que o cron de renovação automática está ativo.
+Verifique se o timer de renovação automática está habilitado.
 
 ---
 
@@ -297,12 +274,10 @@ Abra o domínio no navegador e faça login com as credenciais padrão abaixo.
 
 ## 🛠️ Manutenção e Atualizações
 ```bash
-# Atualizar código e reiniciar backend
+# Atualizar código e redeploy (idempotente)
 cd /var/www/capifit_app
 git pull origin main
-npm install --production
-npm run build
-pm2 restart capifit-backend
+sudo ./scripts/deploy/install_or_update.sh
 
 # Logs e monitoramento
 pm2 logs capifit-backend
