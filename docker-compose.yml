@@ -1,0 +1,65 @@
+version: '3.9'
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: capifit_db
+      POSTGRES_USER: capifit_user
+      POSTGRES_PASSWORD: capifit_pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - '5432:5432'
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      API_BASE_URL: http://localhost:3001
+      FRONTEND_URL: http://localhost:8080
+      DATABASE_URL: postgres://capifit_user:capifit_pass@postgres:5432/capifit_db
+      SHADOW_DATABASE_URL: postgres://capifit_user:capifit_pass@postgres:5432/capifit_shadow
+      JWT_ACCESS_SECRET: change-me-access
+      JWT_REFRESH_SECRET: change-me-refresh
+      JWT_ACCESS_TTL: 900
+      JWT_REFRESH_TTL: 1209600
+      PASSWORD_SALT_ROUNDS: 12
+      REDIS_URL: redis://redis:6379
+      SMTP_HOST: smtp.mailgun.org
+      SMTP_PORT: 587
+      SMTP_USER: capifit
+      SMTP_PASS: change-me
+      SMTP_FROM: CapiFit <no-reply@capifit.com>
+      FILE_STORAGE_DRIVER: local
+      FILE_STORAGE_LOCAL_PATH: ./storage
+      LOG_LEVEL: info
+      RATE_LIMIT_WINDOW_MS: 900000
+      RATE_LIMIT_MAX: 100
+    depends_on:
+      - postgres
+      - redis
+    ports:
+      - '3001:3001'
+    volumes:
+      - api_storage:/app/storage
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    depends_on:
+      - api
+    ports:
+      - '8080:80'
+
+volumes:
+  postgres_data:
+  api_storage:
