@@ -21,6 +21,22 @@ CREATE TABLE users (
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_role ON users(role);
 
+-- Menu Items table (dynamic sidebar/navigation entries)
+CREATE TABLE menu_items (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    label TEXT NOT NULL,
+    path TEXT NOT NULL,
+    icon TEXT,
+    visibility user_role[] NOT NULL DEFAULT ARRAY['trainer', 'client']::user_role[],
+    order_index INTEGER DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX idx_menu_items_active ON menu_items(is_active);
+CREATE INDEX idx_menu_items_order ON menu_items(order_index);
+
 -- Clients table
 CREATE TABLE clients (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -54,7 +70,8 @@ CREATE TABLE exercises (
     image_url TEXT,
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
     is_custom BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Create indexes for exercises
@@ -74,7 +91,8 @@ CREATE TABLE workouts (
     completed_at TIMESTAMP WITH TIME ZONE,
     status workout_status DEFAULT 'scheduled',
     notes TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Create indexes for workouts
@@ -96,7 +114,8 @@ CREATE TABLE physical_assessments (
     measurements JSONB,
     photos JSONB,
     notes TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Create indexes for physical assessments
@@ -117,7 +136,8 @@ CREATE TABLE foods (
     fiber_per_100g DECIMAL(5,2),
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
     is_custom BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Create indexes for foods
@@ -137,7 +157,8 @@ CREATE TABLE meal_plans (
     start_date DATE,
     end_date DATE,
     status subscription_status DEFAULT 'active',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Create indexes for meal plans
@@ -154,7 +175,8 @@ CREATE TABLE messages (
     message_type message_type DEFAULT 'text',
     file_url TEXT,
     is_read BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Create indexes for messages
@@ -173,13 +195,15 @@ CREATE TABLE notifications (
     is_read BOOLEAN DEFAULT FALSE,
     action_url TEXT,
     metadata JSONB,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Create indexes for notifications
 CREATE INDEX idx_notifications_user ON notifications(user_id);
 CREATE INDEX idx_notifications_read ON notifications(is_read);
 CREATE INDEX idx_notifications_created ON notifications(created_at);
+CREATE INDEX idx_notifications_priority ON notifications(priority);
 
 -- Subscriptions table
 CREATE TABLE subscriptions (
@@ -193,7 +217,8 @@ CREATE TABLE subscriptions (
     status subscription_status DEFAULT 'active',
     started_at TIMESTAMP WITH TIME ZONE,
     expires_at TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Create indexes for subscriptions
@@ -213,7 +238,8 @@ CREATE TABLE workout_sessions (
     exercises_completed JSONB,
     notes TEXT,
     rating INTEGER CHECK (rating BETWEEN 1 AND 5),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Create indexes for workout sessions
@@ -230,7 +256,8 @@ CREATE TABLE file_uploads (
     file_type VARCHAR(100),
     file_size BIGINT,
     upload_purpose upload_purpose NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Create indexes for file uploads
@@ -247,8 +274,41 @@ END;
 $$ language 'plpgsql';
 
 -- Create triggers for updated_at
-CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users 
+CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_clients_updated_at BEFORE UPDATE ON clients 
+CREATE TRIGGER update_menu_items_updated_at BEFORE UPDATE ON menu_items
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_clients_updated_at BEFORE UPDATE ON clients
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_exercises_updated_at BEFORE UPDATE ON exercises
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_workouts_updated_at BEFORE UPDATE ON workouts
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_physical_assessments_updated_at BEFORE UPDATE ON physical_assessments
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_foods_updated_at BEFORE UPDATE ON foods
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_meal_plans_updated_at BEFORE UPDATE ON meal_plans
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_messages_updated_at BEFORE UPDATE ON messages
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_notifications_updated_at BEFORE UPDATE ON notifications
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_subscriptions_updated_at BEFORE UPDATE ON subscriptions
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_workout_sessions_updated_at BEFORE UPDATE ON workout_sessions
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_file_uploads_updated_at BEFORE UPDATE ON file_uploads
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

@@ -17,9 +17,25 @@ CREATE TABLE users (
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
+
     INDEX idx_users_email (email),
     INDEX idx_users_role (role)
+);
+
+-- Menu Items table (dynamic sidebar/navigation entries)
+CREATE TABLE menu_items (
+    id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    label VARCHAR(255) NOT NULL,
+    path VARCHAR(255) NOT NULL,
+    icon VARCHAR(100),
+    visibility JSON NOT NULL,
+    order_index INT DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    INDEX idx_menu_items_active (is_active),
+    INDEX idx_menu_items_order (order_index)
 );
 
 -- Clients table
@@ -36,7 +52,7 @@ CREATE TABLE clients (
     subscription_status ENUM('active', 'inactive', 'suspended', 'cancelled') DEFAULT 'active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
+
     FOREIGN KEY (trainer_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_clients_trainer (trainer_id),
     INDEX idx_clients_email (email)
@@ -56,7 +72,8 @@ CREATE TABLE exercises (
     created_by CHAR(36),
     is_custom BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
     FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
     INDEX idx_exercises_category (category),
     INDEX idx_exercises_difficulty (difficulty_level),
@@ -76,7 +93,8 @@ CREATE TABLE workouts (
     status ENUM('scheduled', 'in_progress', 'completed', 'cancelled') DEFAULT 'scheduled',
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
     FOREIGN KEY (trainer_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
     INDEX idx_workouts_trainer (trainer_id),
@@ -99,7 +117,8 @@ CREATE TABLE physical_assessments (
     photos JSON,
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
     FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
     FOREIGN KEY (trainer_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_assessments_client (client_id),
@@ -121,7 +140,8 @@ CREATE TABLE foods (
     created_by CHAR(36),
     is_custom BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
     FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
     INDEX idx_foods_name (name),
     INDEX idx_foods_category (category),
@@ -141,7 +161,8 @@ CREATE TABLE meal_plans (
     end_date DATE,
     status ENUM('active', 'inactive', 'completed') DEFAULT 'active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
     FOREIGN KEY (trainer_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
     INDEX idx_meal_plans_trainer (trainer_id),
@@ -159,7 +180,8 @@ CREATE TABLE messages (
     file_url VARCHAR(500),
     is_read BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
     FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (receiver_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_messages_sender (sender_id),
@@ -179,11 +201,13 @@ CREATE TABLE notifications (
     action_url VARCHAR(500),
     metadata JSON,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_notifications_user (user_id),
     INDEX idx_notifications_read (is_read),
-    INDEX idx_notifications_created (created_at)
+    INDEX idx_notifications_created (created_at),
+    INDEX idx_notifications_priority (priority)
 );
 
 -- Subscriptions table
@@ -199,7 +223,8 @@ CREATE TABLE subscriptions (
     started_at TIMESTAMP,
     expires_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
     FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
     FOREIGN KEY (trainer_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_subscriptions_client (client_id),
@@ -220,7 +245,8 @@ CREATE TABLE workout_sessions (
     notes TEXT,
     rating TINYINT CHECK (rating BETWEEN 1 AND 5),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
     FOREIGN KEY (workout_id) REFERENCES workouts(id) ON DELETE CASCADE,
     FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
     INDEX idx_workout_sessions_workout (workout_id),
@@ -238,7 +264,8 @@ CREATE TABLE file_uploads (
     file_size BIGINT,
     upload_purpose ENUM('avatar', 'exercise_image', 'exercise_video', 'assessment_photo', 'document') NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_file_uploads_user (user_id),
     INDEX idx_file_uploads_purpose (upload_purpose)
