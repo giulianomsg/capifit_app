@@ -1,0 +1,29 @@
+{
+  "name": "capifit-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "dev": "ts-node-dev --respawn src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@prisma/client": "5.14.0",
+    "express": "5.1.0",
+    "http-status-codes": "2.3.0",
+    "morgan": "1.10.0",
+    "zod": "3.23.8"
+  },
+  "devDependencies": {
+    "@types/express": "4.17.21",
+    "@types/node": "22.10.1",
+    "@types/supertest": "2.0.16",
+    "prisma": "5.14.0",
+    "supertest": "6.3.4",
+    "ts-node-dev": "2.0.0",
+    "typescript": "5.6.3",
+    "vitest": "1.6.0"
+  }
+}
