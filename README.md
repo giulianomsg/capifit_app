@@ -71,6 +71,14 @@ CapiFit is a full-stack platform that empowers personal trainers to manage clien
    ```
    Ajuste as URLs, segredos JWT e credenciais de banco/conexões conforme necessário.
 
+   Caso esteja inicializando um PostgreSQL do zero, execute o script de bootstrap para criar o usuário/banco esperados:
+
+   ```bash
+   psql -U postgres -h localhost -f apps/api/prisma/bootstrap.sql
+   ```
+
+   O comando é idempotente e garante a existência do usuário `capifit_user` com acesso total ao banco `capifit_db`.
+
 5. **Gere o client Prisma, rode migrações e seeds**
    ```bash
    npm run generate --workspace apps/api

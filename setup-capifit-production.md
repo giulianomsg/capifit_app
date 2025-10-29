@@ -162,11 +162,10 @@ O serviço `web` já entrega a aplicação através de um Nginx interno, expondo
 ### 7.1 PostgreSQL local
 ```bash
 sudo apt install -y postgresql postgresql-contrib
-sudo -u postgres psql -c "CREATE ROLE capifit WITH LOGIN PASSWORD 'senha_forte';"
-sudo -u postgres psql -c "CREATE DATABASE capifit OWNER capifit;"
+sudo -u postgres psql -f apps/api/prisma/bootstrap.sql
 ```
 
-Edite `/etc/postgresql/14/main/postgresql.conf` e `pg_hba.conf` conforme necessário para conexões remotas seguras.
+O script `bootstrap.sql` é idempotente e provisiona o usuário `capifit_user` com senha padrão (`CAPIFIT_STRONG_PASSWORD`, altere após executar) e os bancos `capifit_db` e `capifit_shadow`. Ajuste `/etc/postgresql/14/main/postgresql.conf` e `pg_hba.conf` conforme necessário para conexões remotas seguras.
 
 ### 7.2 Redis
 ```bash

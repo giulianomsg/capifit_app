@@ -150,7 +150,8 @@ model User {
   measurementRecordsReceived  MeasurementRecord[]   @relation("ClientMeasurementRecords")
   progressPhotos              ProgressPhoto[]       @relation("ClientProgressPhotos")
   progressPhotosAuthored      ProgressPhoto[]       @relation("TrainerProgressPhotos")
-  assessmentAttachments       AssessmentAttachment[]
+  assessmentAttachmentsAsTrainer AssessmentAttachment[] @relation("AssessmentAttachmentTrainer")
+  assessmentAttachmentsAsClient  AssessmentAttachment[] @relation("AssessmentAttachmentClient")
   foodsCreated                Food[]                @relation("FoodCreators")
   nutritionPlansAuthored      NutritionPlan[]       @relation("TrainerNutritionPlans")
   nutritionPlansReceived      NutritionPlan[]       @relation("ClientNutritionPlans")
@@ -461,8 +462,8 @@ model AssessmentAttachment {
   mimeType     String
   size         Int
   uploadedAt   DateTime @default(now())
-  trainer      User     @relation(fields: [trainerId], references: [id], onDelete: Cascade)
-  client       User     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  trainer      User     @relation("AssessmentAttachmentTrainer", fields: [trainerId], references: [id], onDelete: Cascade)
+  client       User     @relation("AssessmentAttachmentClient", fields: [clientId], references: [id], onDelete: Cascade)
   assessment   Assessment? @relation(fields: [assessmentId], references: [id], onDelete: SetNull)
 
   @@index([clientId])
