@@ -1,15 +1,35 @@
-import React from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import React, { useEffect } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
+import { useRealtime } from '../../../contexts/RealtimeContext';
 import { getWorkout, listWorkouts } from '../../../services/workoutService';
 
 const WorkoutTemplates = ({ onApplyTemplate }) => {
+  const queryClient = useQueryClient();
+  const { socket } = useRealtime();
   const { data, isLoading } = useQuery({
     queryKey: ['workouts', 'templates'],
     queryFn: () => listWorkouts({ template: true, perPage: 20 }),
   });
+
+  useEffect(() => {
+    if (!socket) {
+      return undefined;
+    }
+
+    const handleSync = () => {
+      queryClient.invalidateQueries({ queryKey: ['workouts', 'templates'] });
+    };
+
+    const events = ['workout:created', 'workout:updated', 'workout:deleted'];
+    events.forEach((event) => socket.on(event, handleSync));
+
+    return () => {
+      events.forEach((event) => socket.off(event, handleSync));
+    };
+  }, [socket, queryClient]);
 
   const applyTemplateMutation = useMutation({
     mutationFn: (workoutId) => getWorkout(workoutId),

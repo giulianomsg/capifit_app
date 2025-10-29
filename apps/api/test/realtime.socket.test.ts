@@ -7,7 +7,7 @@ import request from 'supertest';
 import { io as createClient, type Socket } from 'socket.io-client';
 import type { Express } from 'express';
 import type { PrismaClient } from '@prisma/client';
-import { NotificationCategory } from '@prisma/client';
+import { NotificationCategory, ExerciseCategory, MuscleGroup, WorkoutDifficulty } from '@prisma/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import {
@@ -60,6 +60,8 @@ describe('Realtime socket flows', () => {
   let server: HttpServer;
   let baseUrl: string;
 
+  let trainerId: string;
+  let trainerId: string;
   let trainerToken: string;
   let trainerSocket: Socket | null;
 
@@ -133,6 +135,7 @@ describe('Realtime socket flows', () => {
       password: 'Trainer123!',
       roles: ['trainer'],
     });
+    trainerId = trainer.id;
     trainerToken = await authenticate(app, trainer.email, 'Trainer123!');
 
     const client = await createUserWithRoles(prisma, {
@@ -213,6 +216,124 @@ describe('Realtime socket flows', () => {
 
     const notificationRecord = await prisma.notification.findUniqueOrThrow({ where: { id: notificationEvent.id } });
     expect(notificationRecord.readAt).not.toBeNull();
+  });
+
+  it('emits workout and nutrition domain events to assigned users', async () => {
+    await prisma.trainerClient.create({
+      data: { trainerId, clientId, status: 'ACTIVE' },
+    });
+
+    const exercise = await prisma.exercise.create({
+      data: {
+        name: 'Agachamento Realtime',
+        slug: 'agachamento-realtime',
+        category: ExerciseCategory.STRENGTH,
+        primaryMuscle: MuscleGroup.LEGS,
+        difficulty: WorkoutDifficulty.INTERMEDIATE,
+      },
+    });
+
+    const createdEventClient = waitForEvent(clientSocket!, 'workout:created');
+    const createdEventTrainer = waitForEvent(trainerSocket!, 'workout:created');
+
+    const createWorkoutResponse = await request(app)
+      .post('/api/v1/workouts')
+      .set('Authorization', `Bearer ${trainerToken}`)
+      .send({
+        title: 'Treino Realtime',
+        description: 'Plano emitindo eventos',
+        difficulty: WorkoutDifficulty.INTERMEDIATE,
+        status: 'ACTIVE',
+        clientId,
+        blocks: [
+          {
+            title: 'Principal',
+            order: 0,
+            exercises: [
+              {
+                exerciseId: exercise.id,
+                order: 0,
+                sets: 3,
+                reps: 12,
+              },
+            ],
+          },
+        ],
+      });
+
+    expect(createWorkoutResponse.status).toBe(201);
+    const workoutId = createWorkoutResponse.body.workout.id as string;
+
+    const [clientCreatedPayload, trainerCreatedPayload] = await Promise.all([
+      createdEventClient,
+      createdEventTrainer,
+    ]);
+
+    expect(clientCreatedPayload).toMatchObject({ workout: { id: workoutId, clientId } });
+    expect(trainerCreatedPayload).toMatchObject({ workout: { id: workoutId, trainerId } });
+
+    const updatedEventClient = waitForEvent(clientSocket!, 'workout:updated');
+    const updatedEventTrainer = waitForEvent(trainerSocket!, 'workout:updated');
+
+    const updateWorkoutResponse = await request(app)
+      .patch(`/api/v1/workouts/${workoutId}`)
+      .set('Authorization', `Bearer ${trainerToken}`)
+      .send({ title: 'Treino Realtime Atualizado' });
+
+    expect(updateWorkoutResponse.status).toBe(200);
+    await Promise.all([updatedEventClient, updatedEventTrainer]);
+
+    const planCreatedClient = waitForEvent(clientSocket!, 'nutrition:plan-created');
+    const planCreatedTrainer = waitForEvent(trainerSocket!, 'nutrition:plan-created');
+
+    const planResponse = await request(app)
+      .post('/api/v1/nutrition/plans')
+      .set('Authorization', `Bearer ${trainerToken}`)
+      .send({
+        clientId,
+        title: 'Plano Nutri Realtime',
+        description: 'Plano nutricional com eventos',
+        caloriesGoal: 2100,
+        meals: [
+          {
+            name: 'Café da manhã',
+            items: [
+              {
+                customName: 'Smoothie proteico',
+                quantity: 1,
+                macros: { calories: 420, protein: 28, carbs: 36, fat: 12 },
+              },
+            ],
+          },
+        ],
+      });
+
+    expect(planResponse.status).toBe(201);
+    const planId = planResponse.body.plan.id as string;
+    const [clientPlanPayload, trainerPlanPayload] = await Promise.all([
+      planCreatedClient,
+      planCreatedTrainer,
+    ]);
+
+    expect(clientPlanPayload).toMatchObject({ plan: { id: planId, clientId } });
+    expect(trainerPlanPayload).toMatchObject({ plan: { id: planId, trainerId } });
+
+    const planUpdatedClient = waitForEvent(clientSocket!, 'nutrition:plan-updated');
+    const planUpdatedTrainer = waitForEvent(trainerSocket!, 'nutrition:plan-updated');
+
+    const attachmentResponse = await request(app)
+      .post(`/api/v1/nutrition/plans/${planId}/attachments`)
+      .set('Authorization', `Bearer ${trainerToken}`)
+      .attach('file', Buffer.from('Relatorio de progresso'), 'relatorio.txt');
+
+    expect(attachmentResponse.status).toBe(201);
+    const [clientPlanUpdatedPayload, trainerPlanUpdatedPayload] = await Promise.all([
+      planUpdatedClient,
+      planUpdatedTrainer,
+    ]);
+
+    expect(clientPlanUpdatedPayload).toMatchObject({ planId });
+    expect(trainerPlanUpdatedPayload).toMatchObject({ planId });
   });
 
   it('keeps sockets authenticated after token refresh and allows realtime messaging', async () => {

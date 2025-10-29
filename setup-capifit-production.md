@@ -85,6 +85,7 @@ Em `apps/web/.env` ajuste:
 - `VITE_API_URL=https://app.seudominio.com/api`
 - `VITE_WS_URL=https://app.seudominio.com`
 - `VITE_WS_PATH=/socket.io`
+- A API publica eventos Socket.IO `workout:created|updated|deleted|session-logged` e `nutrition:plan-created|plan-updated`; mantenha `VITE_WS_URL` acessível para que o frontend invalide caches automaticamente.
 - Opcional: `VITE_GOOGLE_ANALYTICS_ID`, `VITE_SENTRY_DSN`
 
 Salve os arquivos `.env` em local seguro (backup + controle de acesso).

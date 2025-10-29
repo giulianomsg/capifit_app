@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Download, Filter, Loader2, PlusCircle, Search } from 'lucide-react';
 
 import Button from '../../components/ui/Button';
 import Header from '../../components/ui/Header';
 import Sidebar from '../../components/ui/Sidebar';
+import { useRealtime } from '../../contexts/RealtimeContext';
 import {
   getNutritionAnalytics,
   getNutritionOverview,
@@ -25,6 +26,8 @@ const statusFilters = [
 ];
 
 const NutritionManagement = () => {
+  const queryClient = useQueryClient();
+  const { socket } = useRealtime();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [showNotifications, setShowNotifications] = useState(true);
@@ -44,6 +47,25 @@ const NutritionManagement = () => {
     queryKey: ['nutrition', 'analytics'],
     queryFn: () => getNutritionAnalytics(),
   });
+
+  useEffect(() => {
+    if (!socket) {
+      return undefined;
+    }
+
+    const handleSync = () => {
+      queryClient.invalidateQueries({ queryKey: ['nutrition', 'overview'] });
+      queryClient.invalidateQueries({ queryKey: ['nutrition', 'plans'] });
+      queryClient.invalidateQueries({ queryKey: ['nutrition', 'analytics'] });
+    };
+
+    const events = ['nutrition:plan-created', 'nutrition:plan-updated'];
+    events.forEach((event) => socket.on(event, handleSync));
+
+    return () => {
+      events.forEach((event) => socket.off(event, handleSync));
+    };
+  }, [socket, queryClient]);
 
   const plans = plansQuery.data ?? [];
 

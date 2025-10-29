@@ -12,6 +12,7 @@ import {
 } from '@prisma/client';
 
 import { prisma } from '../lib/prisma';
+import { emitToUser } from '../lib/socket';
 import { recordAuditLog } from '../repositories/user-repository';
 import { createNotification } from './notification-service';
 
@@ -203,6 +204,22 @@ function serializeWorkout(workout: WorkoutPayload) {
       })),
     })),
   };
+}
+
+function emitWorkoutEvent(
+  event: 'created' | 'updated' | 'deleted' | 'session-logged',
+  payload: unknown,
+  recipients: Array<string | null | undefined>,
+) {
+  const uniqueRecipients = new Set<string>();
+  for (const recipient of recipients) {
+    if (typeof recipient === 'string' && recipient.trim().length > 0) {
+      uniqueRecipients.add(recipient);
+    }
+  }
+  uniqueRecipients.forEach((userId) => {
+    emitToUser(userId, `workout:${event}`, payload);
+  });
 }
 
 function normalizePage(input?: number) {
@@ -429,6 +446,8 @@ export async function createWorkout(user: AuthenticatedUser, payload: unknown) {
     });
   }
 
+  emitWorkoutEvent('created', { workout: serializeWorkout(created) }, [trainerId, created.clientId]);
+
   return serializeWorkout(created);
 }
 
@@ -552,13 +571,60 @@ export async function updateWorkout(user: AuthenticatedUser, id: string, payload
     metadata: data,
   });
 
+  const previousClientId = workout.clientId ?? null;
+  const nextClientId = updated.clientId ?? null;
+  const clientChanged = previousClientId !== nextClientId;
+  const hasMeaningfulChanges = Object.values(data).some((value) => value !== undefined);
+
+  if (clientChanged && previousClientId) {
+    await createNotification({
+      userId: previousClientId,
+      category: NotificationCategory.WORKOUT,
+      priority: NotificationPriority.LOW,
+      title: 'Treino reatribuído',
+      message: `Você não está mais associado ao treino "${updated.title}".`,
+      data: { workoutId: updated.id },
+    });
+  }
+
+  if (nextClientId && !updated.isTemplate) {
+    let notificationTitle: string | null = null;
+    let message: string | null = null;
+    let priority = NotificationPriority.NORMAL;
+    let emailFallback = false;
+
+    if (clientChanged) {
+      notificationTitle = 'Novo treino atribuído';
+      message = `Um novo treino "${updated.title}" foi atribuído a você.`;
+      emailFallback = true;
+    } else if (hasMeaningfulChanges) {
+      notificationTitle = 'Treino atualizado';
+      message = `Seu treino "${updated.title}" foi atualizado pelo treinador.`;
+      priority = NotificationPriority.LOW;
+    }
+
+    if (notificationTitle && message) {
+      await createNotification({
+        userId: nextClientId,
+        category: NotificationCategory.WORKOUT,
+        priority,
+        title: notificationTitle,
+        message,
+        data: { workoutId: updated.id },
+        emailFallback,
+      });
+    }
+  }
+
+  emitWorkoutEvent('updated', { workout: serializeWorkout(updated) }, [workout.trainerId, previousClientId, nextClientId]);
+
   return serializeWorkout(updated);
 }
 
 export async function deleteWorkout(user: AuthenticatedUser, id: string) {
   const workout = await prisma.workout.findFirst({
     where: { id, deletedAt: null },
-    select: { trainerId: true },
+    select: { trainerId: true, clientId: true, title: true },
   });
 
   if (!workout) {
@@ -580,6 +646,19 @@ export async function deleteWorkout(user: AuthenticatedUser, id: string) {
     entity: 'workout',
     entityId: id,
   });
+
+  if (workout.clientId) {
+    await createNotification({
+      userId: workout.clientId,
+      category: NotificationCategory.WORKOUT,
+      priority: NotificationPriority.LOW,
+      title: 'Treino arquivado',
+      message: `O treino "${workout.title ?? 'do seu plano'}" foi arquivado pelo treinador.`,
+      data: { workoutId: id },
+    });
+  }
+
+  emitWorkoutEvent('deleted', { workoutId: id }, [workout.trainerId, workout.clientId]);
 }
 
 const sessionSchema = z.object({
@@ -596,7 +675,7 @@ export async function registerWorkoutSession(
 ) {
   const workout = await prisma.workout.findFirst({
     where: { id: workoutId, deletedAt: null },
-    select: { id: true, trainerId: true, clientId: true },
+    select: { id: true, trainerId: true, clientId: true, title: true },
   });
 
   if (!workout) {
@@ -648,6 +727,19 @@ export async function registerWorkoutSession(
       clientId: workout.clientId,
     },
   });
+
+  if (workout.trainerId && workout.trainerId !== user.id) {
+    await createNotification({
+      userId: workout.trainerId,
+      category: NotificationCategory.WORKOUT,
+      priority: NotificationPriority.LOW,
+      title: 'Sessão registrada',
+      message: `${user.name ?? 'Seu aluno'} registrou uma sessão do treino "${workout.title ?? ''}".`,
+      data: { workoutId: workout.id, sessionId: created.id },
+    });
+  }
+
+  emitWorkoutEvent('session-logged', { workoutId: workout.id, session: created }, [workout.trainerId, workout.clientId]);
 
   return created;
 }

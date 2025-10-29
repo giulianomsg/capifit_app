@@ -11,6 +11,7 @@ import {
 
 import { prisma } from '@lib/prisma';
 import { storage } from '@lib/storage';
+import { emitToUser } from '@lib/socket';
 import { createNotification } from './notification-service';
 
 interface AuthenticatedUser {
@@ -72,6 +73,22 @@ async function ensureClientAssignment(user: AuthenticatedUser | undefined, clien
   if (!assignment) {
     throw createHttpError(403, 'Você não possui acesso aos dados deste cliente');
   }
+}
+
+function emitNutritionEvent(
+  event: 'plan-created' | 'plan-updated',
+  payload: unknown,
+  recipients: Array<string | null | undefined>,
+) {
+  const uniqueRecipients = new Set<string>();
+  for (const recipient of recipients) {
+    if (typeof recipient === 'string' && recipient.trim().length > 0) {
+      uniqueRecipients.add(recipient);
+    }
+  }
+  uniqueRecipients.forEach((userId) => {
+    emitToUser(userId, `nutrition:${event}`, payload);
+  });
 }
 
 function buildPlanStatus(plan: { status: NutritionPlanStatus; compliance: number }) {
@@ -146,6 +163,25 @@ function computePlanCompliance(plan: Prisma.NutritionPlanGetPayload<{
 
   const compliance = Math.min(100, Math.max(0, Math.round((totals.calories / plan.caloriesGoal) * 100)));
   return { compliance, totals };
+}
+
+function buildPlanSummary(plan: Prisma.NutritionPlanGetPayload<{
+  include: { client: true; meals: { include: { items: true } } };
+}>) {
+  const { compliance, totals } = computePlanCompliance(plan);
+  return {
+    id: plan.id,
+    clientId: plan.clientId,
+    clientName: plan.client.name,
+    caloriesGoal: plan.caloriesGoal,
+    startDate: plan.startDate,
+    updatedAt: plan.updatedAt,
+    status: buildPlanStatus({ status: plan.status, compliance }),
+    compliance,
+    title: plan.title,
+    macros: plan.macros,
+    totals,
+  };
 }
 
 export async function listFoods(params: {
@@ -399,21 +435,11 @@ export async function createNutritionPlan(params: { user: AuthenticatedUser | un
     emailFallback: true,
   });
 
-  const { compliance, totals } = computePlanCompliance(plan);
+  const summary = buildPlanSummary(plan);
 
-  return {
-    id: plan.id,
-    clientId: plan.clientId,
-    clientName: plan.client.name,
-    caloriesGoal: plan.caloriesGoal,
-    startDate: plan.startDate,
-    updatedAt: plan.updatedAt,
-    status: buildPlanStatus({ status: plan.status, compliance }),
-    compliance,
-    title: plan.title,
-    macros: plan.macros,
-    totals,
-  };
+  emitNutritionEvent('plan-created', { plan: summary }, [plan.clientId, plan.trainerId]);
+
+  return summary;
 }
 
 export async function listNutritionAttachments(params: {
@@ -478,6 +504,15 @@ export async function saveNutritionAttachment(params: {
     message: `${attachment.filename} foi adicionado ao plano ${plan.title}.`,
     data: { planId: plan.id, attachmentId: attachment.id },
   });
+
+  emitNutritionEvent('plan-updated', {
+    planId: plan.id,
+    attachment: {
+      id: attachment.id,
+      filename: attachment.filename,
+      uploadedAt: attachment.uploadedAt,
+    },
+  }, [plan.clientId, plan.trainerId]);
 
   return {
     id: attachment.id,

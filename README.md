@@ -154,6 +154,7 @@ Frontend reachable at `http://localhost:8080`, API proxied under `/api`.
 - Socket.IO server montado em `/socket.io` reutiliza o token JWT do usuário; o frontend cria/desfaz conexões automaticamente através de `RealtimeProvider`.
 - A central de notificações (`/v1/notifications`) oferece filtros (categoria, apenas não lidas), marcação em massa, exclusão e atualização de preferências (`/preferences`). Eventos `notification:new` disparam invalidation da React Query e fallback de e-mail via BullMQ + Nodemailer.
 - O hub de mensagens (`/v1/messaging`) lista threads com últimos recados, permite enviar mensagens texto, sinaliza não lidas e registra recibos (`message:new`, `messaging:mark-read`).
+- Eventos de domínio mantêm treinos e planos nutricionais sincronizados em tempo real: `workout:created|updated|deleted|session-logged` e `nutrition:plan-created|plan-updated` disparam invalidações automáticas no frontend e notificações direcionadas.
 - Redis é obrigatório em produção para operar a fila `notifications:email`; em desenvolvimento, o serviço executa fallback síncrono quando `REDIS_URL` não está configurada e registra avisos nos logs. Administradores podem consultar a saúde da fila em tempo real via `GET /api/v1/notifications/health` (requer bearer token admin).
 
 ## 🔐 Security & Observability
