@@ -47,6 +47,25 @@ async function createUserWithRoles(data: { name: string; email: string; password
   return user;
 }
 
+async function createThreadWithUnreadMessage(title: string, messageSuffix: string) {
+  const threadResponse = await request(app)
+    .post('/api/v1/messaging/threads')
+    .set('Authorization', `Bearer ${trainerToken}`)
+    .send({ participantIds: [clientId], title });
+
+  expect(threadResponse.status).toBe(201);
+  const threadId = threadResponse.body.id as string;
+
+  const messageResponse = await request(app)
+    .post(`/api/v1/messaging/threads/${threadId}/messages`)
+    .set('Authorization', `Bearer ${clientToken}`)
+    .send({ content: `Mensagem do cliente ${messageSuffix}` });
+
+  expect(messageResponse.status).toBe(201);
+
+  return { threadId, messageId: messageResponse.body.id as string };
+}
+
 describe('Messaging routes', () => {
   beforeAll(async () => {
     configureTestDatabaseEnv();
@@ -153,5 +172,48 @@ describe('Messaging routes', () => {
       where: { threadId_userId: { threadId, userId: trainerId } },
     });
     expect(participant.lastReadAt).not.toBeNull();
+  });
+
+  it('paginates threads, surfaces unread counters and supports search filters', async () => {
+    const createdThreads = [] as { threadId: string; messageId: string }[];
+    for (let index = 0; index < 5; index += 1) {
+      const result = await createThreadWithUnreadMessage(`Sessão ${index + 1}`, `${index + 1}`);
+      createdThreads.push(result);
+    }
+
+    // Mark the first thread as read so it no longer counts as unread.
+    const first = createdThreads[0];
+    await request(app)
+      .post(`/api/v1/messaging/threads/${first.threadId}/read`)
+      .set('Authorization', `Bearer ${trainerToken}`)
+      .send({ lastMessageId: first.messageId });
+
+    const paginatedResponse = await request(app)
+      .get('/api/v1/messaging/threads')
+      .set('Authorization', `Bearer ${trainerToken}`)
+      .query({ page: 2, perPage: 2 });
+
+    expect(paginatedResponse.status).toBe(200);
+    expect(paginatedResponse.body.meta).toMatchObject({
+      page: 2,
+      perPage: 2,
+      total: 5,
+      totalPages: 3,
+    });
+
+    expect(paginatedResponse.body.data).toHaveLength(2);
+    expect(paginatedResponse.body.data.every((thread: any) => typeof thread.unreadCount === 'number')).toBe(true);
+
+    const unreadCounts = paginatedResponse.body.data.map((thread: any) => thread.unreadCount);
+    expect(unreadCounts.some((count: number) => count === 1)).toBe(true);
+
+    const searchResponse = await request(app)
+      .get('/api/v1/messaging/threads')
+      .set('Authorization', `Bearer ${trainerToken}`)
+      .query({ search: 'Sessão 3' });
+
+    expect(searchResponse.status).toBe(200);
+    expect(searchResponse.body.meta.total).toBe(1);
+    expect(searchResponse.body.data[0].title).toBe('Sessão 3');
   });
 });

@@ -4,7 +4,7 @@ import request from 'supertest';
 import bcrypt from 'bcryptjs';
 import type { Express } from 'express';
 import type { PrismaClient } from '@prisma/client';
-import { NotificationCategory } from '@prisma/client';
+import { NotificationCategory, NotificationPriority } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import {
@@ -27,6 +27,34 @@ async function authenticateAdmin() {
 
   expect(response.status).toBe(200);
   return response.body.token as string;
+}
+
+async function seedNotifications(userId: string, count: number) {
+  const notifications = [] as { id: string }[];
+  for (let index = 0; index < count; index += 1) {
+    const notification = await prisma.notification.create({
+      data: {
+        userId,
+        category: index % 2 === 0 ? NotificationCategory.SYSTEM : NotificationCategory.WORKOUT,
+        priority: index % 3 === 0 ? NotificationPriority.HIGH : NotificationPriority.NORMAL,
+        title: `Notificação ${index + 1}`,
+        message: `Conteúdo dinâmico ${index + 1}`,
+        createdAt: new Date(Date.now() - index * 60000),
+      },
+      select: { id: true },
+    });
+
+    if (index % 4 === 0) {
+      await prisma.notification.update({
+        where: { id: notification.id },
+        data: { readAt: new Date() },
+      });
+    }
+
+    notifications.push(notification);
+  }
+
+  return notifications;
 }
 
 describe('Notifications routes', () => {
@@ -75,6 +103,57 @@ describe('Notifications routes', () => {
     expect(response.body.data).toHaveLength(1);
     expect(response.body.meta.total).toBe(1);
     expect(response.body.data[0].title).toBe('Nova atualização');
+  });
+
+  it('supports pagination, search and category filtering', async () => {
+    const admin = await prisma.user.findUniqueOrThrow({ where: { email: ADMIN_EMAIL } });
+    await seedNotifications(admin.id, 12);
+
+    const pageTwoResponse = await request(app)
+      .get('/api/v1/notifications')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .query({ page: 2, perPage: 5 });
+
+    expect(pageTwoResponse.status).toBe(200);
+    expect(pageTwoResponse.body.meta).toMatchObject({
+      page: 2,
+      perPage: 5,
+      total: 13,
+      totalPages: 3,
+    });
+    expect(pageTwoResponse.body.data).toHaveLength(5);
+    expect(pageTwoResponse.body.data[0].title).toContain('Notificação');
+
+    const searchResponse = await request(app)
+      .get('/api/v1/notifications')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .query({ search: 'dinâmico 3' });
+
+    expect(searchResponse.status).toBe(200);
+    expect(searchResponse.body.meta.total).toBe(1);
+    expect(searchResponse.body.data[0].message).toContain('dinâmico 3');
+
+    const categoryResponse = await request(app)
+      .get('/api/v1/notifications')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .query({ category: NotificationCategory.WORKOUT });
+
+    expect(categoryResponse.status).toBe(200);
+    expect(categoryResponse.body.data.every((item: any) => item.category === NotificationCategory.WORKOUT)).toBe(true);
+  });
+
+  it('filters unread notifications when requested', async () => {
+    const admin = await prisma.user.findUniqueOrThrow({ where: { email: ADMIN_EMAIL } });
+    await seedNotifications(admin.id, 6);
+
+    const unreadResponse = await request(app)
+      .get('/api/v1/notifications')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .query({ unreadOnly: 'true' });
+
+    expect(unreadResponse.status).toBe(200);
+    expect(unreadResponse.body.meta.total).toBeGreaterThan(0);
+    expect(unreadResponse.body.data.every((item: any) => item.readAt === null)).toBe(true);
   });
 
   it('marks notifications as read', async () => {
