@@ -15,6 +15,7 @@ process.env.SMTP_PORT ??= '587';
 process.env.SMTP_USER ??= 'user';
 process.env.SMTP_PASS ??= 'pass';
 process.env.SMTP_FROM ??= 'Test <test@example.com>';
+process.env.ENABLE_EMAIL_NOTIFICATIONS ??= 'false';
 process.env.FILE_STORAGE_DRIVER ??= 'local';
 process.env.FILE_STORAGE_LOCAL_PATH ??= './tmp/test-storage';
 process.env.LOG_LEVEL ??= 'silent';
