@@ -7,7 +7,14 @@ import request from 'supertest';
 import { io as createClient, type Socket } from 'socket.io-client';
 import type { Express } from 'express';
 import type { PrismaClient } from '@prisma/client';
-import { NotificationCategory, ExerciseCategory, MuscleGroup, WorkoutDifficulty } from '@prisma/client';
+import {
+  NotificationCategory,
+  NotificationChannel,
+  NotificationPriority,
+  ExerciseCategory,
+  MuscleGroup,
+  WorkoutDifficulty,
+} from '@prisma/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import {
@@ -21,6 +28,7 @@ import {
 import { initializeSocket, onSocketConnection } from '../src/lib/socket';
 import { markNotifications } from '../src/services/notification-service';
 import { markThreadRead, sendMessage } from '../src/services/messaging-service';
+import type { NotificationRealtimePayload } from '../src/services/notification-service';
 
 const SALT_ROUNDS = Number(process.env.PASSWORD_SALT_ROUNDS ?? '10');
 
@@ -191,11 +199,15 @@ describe('Realtime socket flows', () => {
     expect(messageResponse.status).toBe(201);
 
     const messageEvent = (await messageEventPromise) as { id: string; threadId: string; content: string };
-    const notificationEvent = (await notificationEventPromise) as { id: string; category: NotificationCategory };
+    const notificationEvent = (await notificationEventPromise) as NotificationRealtimePayload;
 
     expect(messageEvent.threadId).toBe(threadId);
     expect(messageEvent.content).toContain('avaliação');
-    expect(notificationEvent.category).toBe(NotificationCategory.MESSAGE);
+    expect(notificationEvent.notification.category).toBe(NotificationCategory.MESSAGE);
+    expect(notificationEvent.notification.channel).toBe(NotificationChannel.IN_APP);
+    expect(notificationEvent.notification.priority).toBe(NotificationPriority.NORMAL);
+    expect(notificationEvent.delivery.email.requested).toBe(false);
+    expect(notificationEvent.delivery.email.status).toBe('not-requested');
 
     const markMessageResult = await emitWithAck(clientSocket!, 'messaging:mark-read', {
       threadId,
@@ -209,12 +221,14 @@ describe('Realtime socket flows', () => {
     expect(participant.lastReadAt).not.toBeNull();
 
     const markNotificationResult = await emitWithAck(clientSocket!, 'notifications:mark-read', {
-      ids: [notificationEvent.id],
+      ids: [notificationEvent.notification.id],
       read: true,
     });
     expect(markNotificationResult).toMatchObject({ ok: true, result: { count: 1 } });
 
-    const notificationRecord = await prisma.notification.findUniqueOrThrow({ where: { id: notificationEvent.id } });
+    const notificationRecord = await prisma.notification.findUniqueOrThrow({
+      where: { id: notificationEvent.notification.id },
+    });
     expect(notificationRecord.readAt).not.toBeNull();
   });
 
@@ -235,6 +249,7 @@ describe('Realtime socket flows', () => {
 
     const createdEventClient = waitForEvent(clientSocket!, 'workout:created');
     const createdEventTrainer = waitForEvent(trainerSocket!, 'workout:created');
+    const workoutNotificationPromise = waitForEvent(clientSocket!, 'notification:new');
 
     const createWorkoutResponse = await request(app)
       .post('/api/v1/workouts')
@@ -264,16 +279,23 @@ describe('Realtime socket flows', () => {
     expect(createWorkoutResponse.status).toBe(201);
     const workoutId = createWorkoutResponse.body.workout.id as string;
 
-    const [clientCreatedPayload, trainerCreatedPayload] = await Promise.all([
+    const [clientCreatedPayload, trainerCreatedPayload, workoutNotification] = await Promise.all([
       createdEventClient,
       createdEventTrainer,
+      workoutNotificationPromise,
     ]);
 
     expect(clientCreatedPayload).toMatchObject({ workout: { id: workoutId, clientId } });
     expect(trainerCreatedPayload).toMatchObject({ workout: { id: workoutId, trainerId } });
+    const workoutNotificationPayload = workoutNotification as NotificationRealtimePayload;
+    expect(workoutNotificationPayload.notification.category).toBe(NotificationCategory.WORKOUT);
+    expect(workoutNotificationPayload.delivery.email.requested).toBe(true);
+    expect(workoutNotificationPayload.delivery.email.enabled).toBe(false);
+    expect(workoutNotificationPayload.delivery.email.status).toBe('disabled');
 
     const updatedEventClient = waitForEvent(clientSocket!, 'workout:updated');
     const updatedEventTrainer = waitForEvent(trainerSocket!, 'workout:updated');
+    const workoutUpdateNotificationPromise = waitForEvent(clientSocket!, 'notification:new');
 
     const updateWorkoutResponse = await request(app)
       .patch(`/api/v1/workouts/${workoutId}`)
@@ -281,10 +303,21 @@ describe('Realtime socket flows', () => {
       .send({ title: 'Treino Realtime Atualizado' });
 
     expect(updateWorkoutResponse.status).toBe(200);
-    await Promise.all([updatedEventClient, updatedEventTrainer]);
+    const [clientUpdatedPayload, trainerUpdatedPayload, workoutUpdateNotification] = await Promise.all([
+      updatedEventClient,
+      updatedEventTrainer,
+      workoutUpdateNotificationPromise,
+    ]);
+    expect(clientUpdatedPayload).toBeDefined();
+    expect(trainerUpdatedPayload).toBeDefined();
+    const workoutUpdateNotificationPayload = workoutUpdateNotification as NotificationRealtimePayload;
+    expect(workoutUpdateNotificationPayload.notification.category).toBe(NotificationCategory.WORKOUT);
+    expect(workoutUpdateNotificationPayload.delivery.email.requested).toBe(false);
+    expect(workoutUpdateNotificationPayload.delivery.email.status).toBe('not-requested');
 
     const planCreatedClient = waitForEvent(clientSocket!, 'nutrition:plan-created');
     const planCreatedTrainer = waitForEvent(trainerSocket!, 'nutrition:plan-created');
+    const planNotificationPromise = waitForEvent(clientSocket!, 'notification:new');
 
     const planResponse = await request(app)
       .post('/api/v1/nutrition/plans')
@@ -310,16 +343,23 @@ describe('Realtime socket flows', () => {
 
     expect(planResponse.status).toBe(201);
     const planId = planResponse.body.plan.id as string;
-    const [clientPlanPayload, trainerPlanPayload] = await Promise.all([
+    const [clientPlanPayload, trainerPlanPayload, planNotification] = await Promise.all([
       planCreatedClient,
       planCreatedTrainer,
+      planNotificationPromise,
     ]);
 
     expect(clientPlanPayload).toMatchObject({ plan: { id: planId, clientId } });
     expect(trainerPlanPayload).toMatchObject({ plan: { id: planId, trainerId } });
+    const planNotificationPayload = planNotification as NotificationRealtimePayload;
+    expect(planNotificationPayload.notification.category).toBe(NotificationCategory.NUTRITION);
+    expect(planNotificationPayload.delivery.email.requested).toBe(true);
+    expect(planNotificationPayload.delivery.email.enabled).toBe(false);
+    expect(planNotificationPayload.delivery.email.status).toBe('disabled');
 
     const planUpdatedClient = waitForEvent(clientSocket!, 'nutrition:plan-updated');
     const planUpdatedTrainer = waitForEvent(trainerSocket!, 'nutrition:plan-updated');
+    const planAttachmentNotificationPromise = waitForEvent(clientSocket!, 'notification:new');
 
     const attachmentResponse = await request(app)
       .post(`/api/v1/nutrition/plans/${planId}/attachments`)
@@ -327,13 +367,18 @@ describe('Realtime socket flows', () => {
       .attach('file', Buffer.from('Relatorio de progresso'), 'relatorio.txt');
 
     expect(attachmentResponse.status).toBe(201);
-    const [clientPlanUpdatedPayload, trainerPlanUpdatedPayload] = await Promise.all([
+    const [clientPlanUpdatedPayload, trainerPlanUpdatedPayload, planAttachmentNotification] = await Promise.all([
       planUpdatedClient,
       planUpdatedTrainer,
+      planAttachmentNotificationPromise,
     ]);
 
     expect(clientPlanUpdatedPayload).toMatchObject({ planId });
     expect(trainerPlanUpdatedPayload).toMatchObject({ planId });
+    const planAttachmentNotificationPayload = planAttachmentNotification as NotificationRealtimePayload;
+    expect(planAttachmentNotificationPayload.notification.category).toBe(NotificationCategory.NUTRITION);
+    expect(planAttachmentNotificationPayload.delivery.email.requested).toBe(false);
+    expect(planAttachmentNotificationPayload.delivery.email.status).toBe('not-requested');
   });
 
   it('keeps sockets authenticated after token refresh and allows realtime messaging', async () => {

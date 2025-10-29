@@ -73,6 +73,25 @@ function buildNotificationSelect(): Prisma.NotificationSelect {
   } satisfies Prisma.NotificationSelect;
 }
 
+type NotificationSelect = ReturnType<typeof buildNotificationSelect>;
+
+type NotificationRecord = Prisma.NotificationGetPayload<{ select: NotificationSelect }>;
+
+type EmailDeliveryStatus = 'not-requested' | 'disabled' | 'preference-disabled' | 'dispatched';
+
+export interface NotificationRealtimePayload {
+  notification: NotificationRecord;
+  delivery: {
+    email: {
+      requested: boolean;
+      enabled: boolean;
+      preferenceEnabled: boolean;
+      dispatched: boolean;
+      status: EmailDeliveryStatus;
+    };
+  };
+}
+
 async function ensurePreference(userId: string) {
   const preference = await prisma.notificationPreference.findUnique({ where: { userId } });
   if (preference) {
@@ -201,6 +220,14 @@ export async function createNotification(payload: unknown) {
   const preference = await ensurePreference(data.userId);
   const categoryAllowed = preference.categories.length === 0 || preference.categories.includes(data.category);
 
+  const emailDelivery: NotificationRealtimePayload['delivery']['email'] = {
+    requested: Boolean(data.emailFallback),
+    enabled: env.ENABLE_EMAIL_NOTIFICATIONS,
+    preferenceEnabled: preference.emailEnabled,
+    dispatched: false,
+    status: 'not-requested',
+  };
+
   const notification = await prisma.notification.create({
     data: {
       userId: data.userId,
@@ -218,21 +245,35 @@ export async function createNotification(payload: unknown) {
     return notification;
   }
 
-  emitToUser(data.userId, 'notification:new', notification);
+  if (emailDelivery.requested) {
+    if (!emailDelivery.enabled) {
+      emailDelivery.status = 'disabled';
+    } else if (!emailDelivery.preferenceEnabled) {
+      emailDelivery.status = 'preference-disabled';
+    } else {
+      const user = await prisma.user.findUnique({ select: { email: true, name: true }, where: { id: data.userId } });
+      if (!user) {
+        throw createHttpError(404, 'Notification recipient not found');
+      }
 
-  if (data.emailFallback && env.ENABLE_EMAIL_NOTIFICATIONS && preference.emailEnabled) {
-    const user = await prisma.user.findUnique({ select: { email: true, name: true }, where: { id: data.userId } });
-    if (!user) {
-      throw createHttpError(404, 'Notification recipient not found');
+      await enqueueEmailNotification({
+        to: user.email,
+        subject: data.title,
+        html: `<p>Olá ${user.name?.split(' ')[0] ?? ''},</p><p>${data.message}</p>`,
+        text: data.message,
+      });
+
+      emailDelivery.dispatched = true;
+      emailDelivery.status = 'dispatched';
     }
-
-    await enqueueEmailNotification({
-      to: user.email,
-      subject: data.title,
-      html: `<p>Olá ${user.name?.split(' ')[0] ?? ''},</p><p>${data.message}</p>`,
-      text: data.message,
-    });
   }
+
+  emitToUser(data.userId, 'notification:new', {
+    notification,
+    delivery: {
+      email: emailDelivery,
+    },
+  });
 
   return notification;
 }
