@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import Icon from '../../components/AppIcon';
 import Button from '../../components/ui/Button';
@@ -8,77 +9,101 @@ import ConversationView from './components/ConversationView';
 import ClientContextSidebar from './components/ClientContextSidebar';
 import QuickTemplates from './components/QuickTemplates';
 import FileUploadModal from './components/FileUploadModal';
+import { useAuth } from '../../contexts/AuthContext';
+import { useRealtime } from '../../contexts/RealtimeContext';
+import {
+  fetchThread,
+  listThreads,
+  markThreadAsRead,
+  sendThreadMessage,
+} from '../../services/messagingService';
 
 const ChatCommunicationHub = () => {
-  const [selectedContact, setSelectedContact] = useState(null);
+  const { user } = useAuth();
+  const { socket } = useRealtime();
+  const queryClient = useQueryClient();
+
+  const [selectedThreadId, setSelectedThreadId] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
   const [showClientContext, setShowClientContext] = useState(true);
   const [showTemplates, setShowTemplates] = useState(false);
   const [showFileUpload, setShowFileUpload] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [onlineUsers] = useState(['1', '3', '5']);
 
-  const contacts = [
-    {
-      id: '1',
-      name: 'Maria Santos',
-      email: 'maria.santos@email.com',
-      avatar: 'https://images.unsplash.com/photo-1734991032476-bceab8383a59',
-      alt: 'Professional headshot of Maria Santos, a woman with shoulder-length brown hair',
-      lastMessage: 'Obrigada pela dica do exercício!',
-      lastMessageTime: '10:30',
-      unreadCount: 2,
-      isOnline: true,
-      clientType: 'premium',
-      currentPlan: 'Emagrecimento',
-      nextSession: 'Hoje, 16:00',
-    },
-    {
-      id: '2',
-      name: 'Carlos Silva',
-      email: 'carlos.silva@email.com',
-      avatar: 'https://images.unsplash.com/photo-1509472240716-cbcd043e2a2d',
-      alt: 'Professional headshot of Carlos Silva, a man with short dark hair wearing a suit',
-      lastMessage: 'Qual exercício substitui o agachamento?',
-      lastMessageTime: 'Ontem',
-      unreadCount: 0,
-      isOnline: false,
-      clientType: 'regular',
-      currentPlan: 'Hipertrofia',
-      nextSession: 'Amanhã, 09:00',
-    },
-    {
-      id: '3',
-      name: 'Ana Clara',
-      email: 'ana.costa@email.com',
-      avatar: 'https://images.unsplash.com/photo-1730573520193-6ae0b1070621',
-      alt: 'Professional headshot of Ana Costa, a woman with long blonde hair smiling',
-      lastMessage: 'Consegui fazer 3 séries hoje! 💪',
-      lastMessageTime: 'Segunda',
-      unreadCount: 1,
-      isOnline: true,
-      clientType: 'premium',
-      currentPlan: 'Condicionamento',
-      nextSession: 'Quinta, 14:30',
-    },
-    {
-      id: '4',
-      name: 'Pedro Oliveira',
-      email: 'pedro.oliveira@email.com',
-      avatar: 'https://images.unsplash.com/photo-1610024513279-8724fb30468a',
-      alt: 'Professional headshot of Pedro Oliveira, a man with dark hair and beard',
-      lastMessage: 'Posso trocar o horário de amanhã?',
-      lastMessageTime: 'Domingo',
-      unreadCount: 0,
-      isOnline: false,
-      clientType: 'regular',
-      currentPlan: 'Performance',
-      nextSession: 'Sexta, 08:00',
-    },
-  ];
+  const threadsQuery = useQuery({
+    queryKey: ['threads', searchTerm],
+    queryFn: () => listThreads({ search: searchTerm.trim() || undefined }),
+  });
 
-  const filteredContacts = contacts.filter((contact) =>
-    contact.name.toLowerCase().includes(searchTerm.toLowerCase()),
-  );
+  const threadQuery = useQuery({
+    queryKey: ['thread', selectedThreadId],
+    queryFn: () => fetchThread(selectedThreadId),
+    enabled: Boolean(selectedThreadId),
+  });
+
+  const sendMessageMutation = useMutation({
+    mutationFn: (content) => sendThreadMessage(selectedThreadId, { content }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['thread', selectedThreadId] });
+      queryClient.invalidateQueries({ queryKey: ['threads'] });
+    },
+  });
+
+  const markThreadMutation = useMutation({
+    mutationFn: ({ threadId, payload }) => markThreadAsRead(threadId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['threads'] });
+    },
+  });
+
+  useEffect(() => {
+    if (!socket) return undefined;
+    const handleIncomingMessage = (message) => {
+      queryClient.invalidateQueries({ queryKey: ['threads'] });
+      if (message.threadId === selectedThreadId) {
+        queryClient.invalidateQueries({ queryKey: ['thread', selectedThreadId] });
+      }
+    };
+    socket.on('message:new', handleIncomingMessage);
+    return () => {
+      socket.off('message:new', handleIncomingMessage);
+    };
+  }, [queryClient, selectedThreadId, socket]);
+
+  useEffect(() => {
+    if (!selectedThreadId || !threadQuery.data || !user?.id) {
+      return;
+    }
+    if (markThreadMutation.isLoading) {
+      return;
+    }
+    const participant = threadQuery.data.participants.find((item) => item.userId === user.id);
+    const lastMessage = threadQuery.data.messages?.[threadQuery.data.messages.length - 1];
+    if (!participant || !lastMessage) {
+      return;
+    }
+    const hasUnread = !participant.lastReadAt || new Date(participant.lastReadAt) < new Date(lastMessage.createdAt);
+    if (hasUnread) {
+      markThreadMutation.mutate({ threadId: selectedThreadId, payload: { lastMessageId: lastMessage.id } });
+    }
+  }, [markThreadMutation, selectedThreadId, threadQuery.data, user?.id]);
+
+  const threads = threadsQuery.data?.data ?? [];
+  const contacts = useMemo(() => threads, [threads]);
+  useEffect(() => {
+    if (!contacts.length && selectedThreadId) {
+      setSelectedThreadId(null);
+      return;
+    }
+    if (!selectedThreadId && contacts.length > 0) {
+      setSelectedThreadId(contacts[0].id);
+    }
+  }, [contacts, selectedThreadId]);
+  const selectedThread = threadQuery.data;
+  const selectedParticipant = selectedThread?.participants?.find((participant) => participant.userId !== user?.id);
+
+  const handleSendMessage = (content) => {
+    sendMessageMutation.mutate(content);
+  };
 
   return (
     <div className="flex flex-col lg:flex-row h-full min-h-[calc(100vh-4rem)]">
@@ -92,32 +117,45 @@ const ChatCommunicationHub = () => {
           </div>
 
           <Input
-            placeholder="Buscar cliente..."
+            placeholder="Buscar cliente ou assunto"
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
           />
         </div>
         <ContactList
-          contacts={filteredContacts}
-          selectedContact={selectedContact}
-          onSelectContact={setSelectedContact}
-          onlineUsers={onlineUsers}
+          threads={contacts}
+          currentUserId={user?.id}
+          selectedThreadId={selectedThreadId}
+          onSelectThread={setSelectedThreadId}
         />
       </aside>
 
       <main className="flex-1 flex flex-col">
-        <ConversationView
-          contact={selectedContact}
-          onOpenTemplates={() => setShowTemplates(true)}
-          onOpenFileUpload={() => setShowFileUpload(true)}
-          showClientContext={showClientContext}
-          onToggleClientContext={() => setShowClientContext((prev) => !prev)}
-        />
+        {selectedThread ? (
+          <ConversationView
+            thread={selectedThread}
+            messages={selectedThread.messages}
+            currentUserId={user?.id}
+            onSendMessage={handleSendMessage}
+            onOpenTemplates={() => setShowTemplates(true)}
+            onOpenFileUpload={() => setShowFileUpload(true)}
+          />
+        ) : (
+          <div className="flex flex-1 items-center justify-center text-muted-foreground">
+            Selecione uma conversa para começar
+          </div>
+        )}
       </main>
 
-      {showClientContext && selectedContact && (
-        <ClientContextSidebar contact={selectedContact} onClose={() => setShowClientContext(false)} />
+      {showClientContext && (
+        <ClientContextSidebar participant={selectedParticipant} />
       )}
+
+      <div className="fixed bottom-6 right-6 lg:hidden">
+        <Button variant="outline" iconName={showClientContext ? 'EyeOff' : 'Eye'} onClick={() => setShowClientContext((prev) => !prev)}>
+          {showClientContext ? 'Ocultar contexto' : 'Mostrar contexto'}
+        </Button>
+      </div>
 
       {showTemplates && (
         <QuickTemplates onClose={() => setShowTemplates(false)} onSelectTemplate={() => setShowTemplates(false)} />

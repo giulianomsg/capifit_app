@@ -100,6 +100,29 @@ enum NutritionPlanStatus {
   ARCHIVED
 }
 
+enum NotificationCategory {
+  WORKOUT
+  PAYMENT
+  MESSAGE
+  ASSESSMENT
+  NUTRITION
+  SYSTEM
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  PUSH
+  SMS
+}
+
+enum NotificationPriority {
+  LOW
+  NORMAL
+  HIGH
+  CRITICAL
+}
+
 model User {
   id                          String                @id @default(cuid())
   name                        String
@@ -132,6 +155,11 @@ model User {
   nutritionPlansAuthored      NutritionPlan[]       @relation("TrainerNutritionPlans")
   nutritionPlansReceived      NutritionPlan[]       @relation("ClientNutritionPlans")
   nutritionAttachmentsAuthored NutritionAttachment[] @relation("TrainerNutritionAttachments")
+  notifications               Notification[]
+  notificationPreference      NotificationPreference?
+  messageThreadsCreated       MessageThread[]       @relation("ThreadCreators")
+  threadParticipants          ThreadParticipant[]
+  messagesSent                Message[]             @relation("MessageSenders")
 }
 
 model Role {
@@ -538,4 +566,97 @@ model NutritionAttachment {
   @@index([planId])
   @@index([trainerId])
   @@index([uploadedAt])
+}
+
+model NotificationPreference {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  emailEnabled    Boolean  @default(true)
+  smsEnabled      Boolean  @default(false)
+  pushEnabled     Boolean  @default(true)
+  quietHoursStart String?
+  quietHoursEnd   String?
+  categories      String[] @default([])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id          String                @id @default(cuid())
+  userId      String
+  category    NotificationCategory  @default(SYSTEM)
+  channel     NotificationChannel   @default(IN_APP)
+  priority    NotificationPriority  @default(NORMAL)
+  title       String
+  message     String
+  data        Json?
+  readAt      DateTime?
+  deliveredAt DateTime?
+  createdAt   DateTime              @default(now())
+  user        User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([category])
+  @@index([createdAt])
+}
+
+model MessageThread {
+  id            String            @id @default(cuid())
+  title         String?
+  createdById   String
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  lastMessageAt DateTime?
+  createdBy     User              @relation("ThreadCreators", fields: [createdById], references: [id], onDelete: Cascade)
+  participants  ThreadParticipant[]
+  messages      Message[]
+
+  @@index([createdById])
+  @@index([lastMessageAt])
+}
+
+model ThreadParticipant {
+  id         String         @id @default(cuid())
+  threadId   String
+  userId     String
+  role       String?        @default("member")
+  joinedAt   DateTime       @default(now())
+  lastReadAt DateTime?
+  thread     MessageThread  @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  receipts   MessageReceipt[]
+
+  @@unique([threadId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id         String         @id @default(cuid())
+  threadId   String
+  senderId   String
+  content    String
+  attachments Json?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  thread     MessageThread  @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  sender     User           @relation("MessageSenders", fields: [senderId], references: [id], onDelete: Cascade)
+  receipts   MessageReceipt[]
+
+  @@index([threadId])
+  @@index([senderId])
+  @@index([createdAt])
+}
+
+model MessageReceipt {
+  id         String   @id @default(cuid())
+  messageId  String
+  userId     String
+  readAt     DateTime?
+  deliveredAt DateTime?
+  message    Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([userId])
 }

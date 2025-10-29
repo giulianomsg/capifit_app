@@ -21,7 +21,8 @@
       "@routes/*": ["routes/*"],
       "@services/*": ["services/*"],
       "@repositories/*": ["repositories/*"],
-      "@utils/*": ["utils/*"]
+      "@utils/*": ["utils/*"],
+      "@jobs/*": ["jobs/*"]
     }
   },
   "include": ["src"],

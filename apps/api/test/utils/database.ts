@@ -30,6 +30,12 @@ export async function applyMigrations() {
 }
 
 export async function clearDatabase(prisma: PrismaClient) {
+  await prisma.messageReceipt.deleteMany();
+  await prisma.message.deleteMany();
+  await prisma.threadParticipant.deleteMany();
+  await prisma.messageThread.deleteMany();
+  await prisma.notification.deleteMany();
+  await prisma.notificationPreference.deleteMany();
   await prisma.sessionLog.deleteMany();
   await prisma.workoutExercise.deleteMany();
   await prisma.workoutBlock.deleteMany();

@@ -20,6 +20,13 @@ const envSchema = z.object({
   SMTP_USER: z.string(),
   SMTP_PASS: z.string(),
   SMTP_FROM: z.string(),
+  ENABLE_EMAIL_NOTIFICATIONS: z
+    .union([z.literal('true'), z.literal('false'), z.boolean()])
+    .default('true')
+    .transform((value) => {
+      if (typeof value === 'boolean') return value;
+      return value === 'true';
+    }),
   FILE_STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
   FILE_STORAGE_LOCAL_PATH: z.string().optional(),
   FILE_STORAGE_S3_BUCKET: z.string().optional(),
@@ -30,6 +37,18 @@ const envSchema = z.object({
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(900000),
   RATE_LIMIT_MAX: z.coerce.number().default(100),
+  WEBSOCKET_PATH: z.string().default('/socket.io'),
+  WEBSOCKET_ALLOWED_ORIGINS: z
+    .string()
+    .optional()
+    .transform((value) => {
+      if (!value) return undefined;
+      return value
+        .split(',')
+        .map((origin) => origin.trim())
+        .filter((origin) => origin.length > 0);
+    }),
+  NOTIFICATION_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(50).default(3),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);

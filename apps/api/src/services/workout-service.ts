@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto';
 import createHttpError from 'http-errors';
 import { z } from 'zod';
 import {
+  NotificationCategory,
+  NotificationPriority,
   Prisma,
   TrainerClientStatus,
   WorkoutDifficulty,
@@ -11,6 +13,7 @@ import {
 
 import { prisma } from '../lib/prisma';
 import { recordAuditLog } from '../repositories/user-repository';
+import { createNotification } from './notification-service';
 
 interface AuthenticatedUser {
   id: string;
@@ -413,6 +416,18 @@ export async function createWorkout(user: AuthenticatedUser, payload: unknown) {
       title: created.title,
     },
   });
+
+  if (created.clientId && !created.isTemplate) {
+    await createNotification({
+      userId: created.clientId,
+      category: NotificationCategory.WORKOUT,
+      priority: NotificationPriority.NORMAL,
+      title: 'Novo treino disponível',
+      message: `Um novo treino "${created.title}" foi atribuído a você.`,
+      data: { workoutId: created.id },
+      emailFallback: true,
+    });
+  }
 
   return serializeWorkout(created);
 }

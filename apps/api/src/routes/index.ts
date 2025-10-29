@@ -7,6 +7,8 @@ import { exercisesRouter } from './v1/exercises.routes';
 import { nutritionRouter } from './v1/nutrition.routes';
 import { usersRouter } from './v1/users.routes';
 import { workoutsRouter } from './v1/workouts.routes';
+import { notificationsRouter } from './v1/notifications.routes';
+import { messagingRouter } from './v1/messaging.routes';
 import { requireAuth } from '../middlewares/auth';
 
 export const router = Router();
@@ -18,6 +20,8 @@ router.use('/v1/assessments', assessmentsRouter);
 router.use('/v1/nutrition', nutritionRouter);
 router.use('/v1/users', usersRouter);
 router.use('/v1/workouts', workoutsRouter);
+router.use('/v1/notifications', notificationsRouter);
+router.use('/v1/messaging', messagingRouter);
 
 router.get('/v1/profile', requireAuth, (req, res) => {
   res.json({ user: req.user });

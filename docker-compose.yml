@@ -38,11 +38,15 @@ services:
       SMTP_USER: capifit
       SMTP_PASS: change-me
       SMTP_FROM: CapiFit <no-reply@capifit.com>
+      ENABLE_EMAIL_NOTIFICATIONS: 'true'
+      NOTIFICATION_WORKER_CONCURRENCY: 3
       FILE_STORAGE_DRIVER: local
       FILE_STORAGE_LOCAL_PATH: ./storage
       LOG_LEVEL: info
       RATE_LIMIT_WINDOW_MS: 900000
       RATE_LIMIT_MAX: 100
+      WEBSOCKET_PATH: /socket.io
+      WEBSOCKET_ALLOWED_ORIGINS: http://localhost:8080
     depends_on:
       - postgres
       - redis

@@ -10,6 +10,7 @@ CapiFit is a full-stack platform that empowers personal trainers to manage clien
 - **Production-ready tooling**: Docker Compose stack (PostgreSQL, Redis, API, Web), PM2 ecosystem file, structured logging, rate limiting, Helmet and CORS hardening.
 - **User management suite**: Admin REST endpoints and React screens for inviting, editing and deactivating accounts with role-aware RBAC and secure avatar uploads.
 - **Testing foundation**: Vitest + Supertest API tests validating authentication flows and error handling.
+- **Realtime ops**: Socket.IO driven notifications center, live chat hub and Redis-backed e-mail queue to keep trainers and clientes sincronizados em tempo real.
 
 ## 🧱 Project Structure
 
@@ -28,7 +29,7 @@ CapiFit is a full-stack platform that empowers personal trainers to manage clien
 | Layer      | Technology |
 |------------|------------|
 | Backend    | Node.js 20, Express 5, TypeScript, Prisma ORM |
-| Database   | PostgreSQL (Redis reserved for future queues) |
+| Database   | PostgreSQL + Redis (fila BullMQ para notificações/e-mails) |
 | Frontend   | React 18, Vite, React Query, React Hook Form, Zod |
 | Auth       | JWT (access + refresh), bcrypt password hashing |
 | Deployment | Docker Compose, PM2, Nginx, npm workspaces |
@@ -79,7 +80,7 @@ CapiFit is a full-stack platform that empowers personal trainers to manage clien
 ## 🧪 Testing & Linting
 
 ```bash
-npm run test:api      # Vitest + Supertest integration coverage (auth + user management)
+npm run test:api      # Vitest + Supertest (auth, usuários, notificações, chat)
 npm run test:web      # Vitest placeholder (extend with UI tests)
 npm run lint          # Lint API + Web
 npm run lint:api
@@ -116,12 +117,19 @@ docker-compose up --build
 
 Services:
 - `postgres`: persistent PostgreSQL 16 database
-- `redis`: Redis 7 (reserved for job queues / rate limiting)
+- `redis`: Redis 7 (fila BullMQ para envio assíncrono de e-mails/notificações)
 - `api`: Express API container (`apps/api/Dockerfile`)
 - `web`: Nginx static host + proxy for `/api` (`apps/web/Dockerfile`)
 - `api_storage`: named volume with uploaded assets mounted at `/app/storage`
 
 Frontend reachable at `http://localhost:8080`, API proxied under `/api`.
+
+## 🔔 Realtime notifications & chat
+
+- Socket.IO server montado em `/socket.io` reutiliza o token JWT do usuário; o frontend cria/desfaz conexões automaticamente através de `RealtimeProvider`.
+- A central de notificações (`/v1/notifications`) oferece filtros (categoria, apenas não lidas), marcação em massa, exclusão e atualização de preferências (`/preferences`). Eventos `notification:new` disparam invalidation da React Query e fallback de e-mail via BullMQ + Nodemailer.
+- O hub de mensagens (`/v1/messaging`) lista threads com últimos recados, permite enviar mensagens texto, sinaliza não lidas e registra recibos (`message:new`, `messaging:mark-read`).
+- Redis é obrigatório em produção para operar a fila `notifications:email`; em desenvolvimento, o serviço executa fallback síncrono quando `REDIS_URL` não está configurada e registra avisos nos logs. Administradores podem consultar a saúde da fila em tempo real via `GET /api/v1/notifications/health` (requer bearer token admin).
 
 ## 🔐 Security & Observability
 
@@ -143,6 +151,8 @@ Frontend reachable at `http://localhost:8080`, API proxied under `/api`.
 | `ClientProfile` | Extended metrics for clients (subscription, goals, assessments) |
 | `TrainerClient` | Links trainers to their clients with status & metadata |
 | `Exercise` / `Workout*` / `SessionLog` | Exercise catalogue, workout builder blocks and execution logs |
+| `Notification` / `NotificationPreference` | Centro de notificações e preferências por usuário |
+| `MessageThread` / `Message` / `MessageReceipt` | Conversas, mensagens e recibos de leitura |
 
 Initial migration `202501010001_init` builds the schema and triggers. Seeding (`npm run seed --workspace apps/api`) creates:
 - Roles: admin, trainer, client
@@ -174,9 +184,13 @@ Initial migration `202501010001_init` builds the schema and triggers. Seeding (`
 | `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` | Strong secrets (≥32 chars) |
 | `JWT_ACCESS_TTL` / `JWT_REFRESH_TTL` | Token lifetimes (seconds) |
 | `PASSWORD_SALT_ROUNDS` | Bcrypt salt cost (12 in production) |
-| `REDIS_URL` | Redis connection (reserved for queues/rate limiters) |
-| `SMTP_*` | Email provider configuration (future notifications) |
-| `FILE_STORAGE_DRIVER` | `local` or `s3` (uploads roadmap) |
+| `REDIS_URL` | Redis connection (fila de notificações/e-mails + rate limiting) |
+| `SMTP_*` | Configuração SMTP para envios transacionais |
+| `ENABLE_EMAIL_NOTIFICATIONS` | Ativa fila BullMQ + SMTP (`true`/`false`) |
+| `NOTIFICATION_WORKER_CONCURRENCY` | Número de jobs processados em paralelo pelo worker BullMQ |
+| `WEBSOCKET_PATH` | Caminho Socket.IO (default `/socket.io`) |
+| `WEBSOCKET_ALLOWED_ORIGINS` | Lista de origens permitidas, separadas por vírgula |
+| `FILE_STORAGE_DRIVER` | `local` ou `s3` |
 | `FILE_STORAGE_LOCAL_PATH` | Relative/absolute path for local storage (default `./storage`) |
 | `LOG_LEVEL` | Pino log level |
 | `RATE_LIMIT_WINDOW_MS` / `RATE_LIMIT_MAX` | Rate limiting window + quota |
@@ -185,7 +199,8 @@ Initial migration `202501010001_init` builds the schema and triggers. Seeding (`
 | Variable | Description |
 |----------|-------------|
 | `VITE_API_URL` | Base API URL (e.g. `http://localhost:3001/api`) |
-| `VITE_WS_URL` | Realtime/WebSocket base URL (future use) |
+| `VITE_WS_URL` | Base do Socket.IO (ex.: `http://localhost:3001`) |
+| `VITE_WS_PATH` | Caminho Socket.IO (default `/socket.io`) |
 | `VITE_DEV_SERVER_PORT` | Vite dev port (defaults 5173) |
 | `VITE_PREVIEW_PORT` | `vite preview` port (defaults 4173) |
 | `VITE_GOOGLE_ANALYTICS_ID` | Analytics integration (optional) |

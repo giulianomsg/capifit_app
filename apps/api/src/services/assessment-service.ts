@@ -1,10 +1,17 @@
 import { randomUUID } from 'node:crypto';
 
 import createHttpError from 'http-errors';
-import { AssessmentStatus, Prisma, TrainerClientStatus } from '@prisma/client';
+import {
+  AssessmentStatus,
+  NotificationCategory,
+  NotificationPriority,
+  Prisma,
+  TrainerClientStatus,
+} from '@prisma/client';
 
 import { prisma } from '@lib/prisma';
 import { storage } from '@lib/storage';
+import { createNotification } from './notification-service';
 
 interface AuthenticatedUser {
   id: string;
@@ -379,6 +386,20 @@ export async function createAssessment(params: { user: AuthenticatedUser | undef
     });
   }
 
+  await createNotification({
+    userId: params.data.clientId,
+    category: NotificationCategory.ASSESSMENT,
+    priority: NotificationPriority.NORMAL,
+    title: scheduledFor
+      ? 'Nova avaliação física agendada'
+      : 'Avaliação física registrada',
+    message: scheduledFor
+      ? `Sua avaliação está agendada para ${scheduledFor.toLocaleString('pt-BR')}.`
+      : 'Uma nova avaliação foi adicionada ao seu histórico.',
+    data: { assessmentId: assessment.id, scheduledFor },
+    emailFallback: Boolean(scheduledFor),
+  });
+
   return assessment;
 }
 
@@ -422,6 +443,15 @@ export async function updateAssessment(params: {
     await prisma.clientProfile.updateMany({
       where: { userId: updated.clientId },
       data: { nextAssessmentAt: null },
+    });
+    await createNotification({
+      userId: updated.clientId,
+      category: NotificationCategory.ASSESSMENT,
+      priority: NotificationPriority.HIGH,
+      title: 'Avaliação concluída',
+      message: 'Sua avaliação física foi concluída e os resultados já estão disponíveis.',
+      data: { assessmentId: updated.id },
+      emailFallback: true,
     });
   }
 

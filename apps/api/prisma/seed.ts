@@ -7,6 +7,8 @@ import {
   ExerciseCategory,
   MuscleGroup,
   NutritionPlanStatus,
+  NotificationCategory,
+  NotificationPriority,
   PaymentStatus,
   PrismaClient,
   SubscriptionPlan,
@@ -719,6 +721,119 @@ async function seedNutritionPlans(trainerId: string, clientIds: string[]) {
   console.log(`✅ Nutrition plan created for client ${clientId}: ${plan.title}`);
 }
 
+async function seedNotificationPreferences(userIds: string[]) {
+  for (const userId of userIds) {
+    await prisma.notificationPreference.upsert({
+      where: { userId },
+      update: {},
+      create: {
+        userId,
+        categories: Object.values(NotificationCategory),
+        emailEnabled: true,
+        pushEnabled: true,
+        smsEnabled: false,
+      },
+    });
+  }
+}
+
+async function seedNotifications(trainerId: string, clientIds: string[]) {
+  const trainer = await prisma.user.findUnique({ where: { id: trainerId } });
+  if (!trainer) return;
+
+  for (const clientId of clientIds) {
+    const client = await prisma.user.findUnique({ where: { id: clientId } });
+    if (!client) continue;
+
+    await prisma.notification.createMany({
+      data: [
+        {
+          id: randomUUID(),
+          userId: trainerId,
+          category: NotificationCategory.WORKOUT,
+          priority: NotificationPriority.NORMAL,
+          title: `Treino atualizado para ${client.name}`,
+          message: 'Novo treino disponível no painel do cliente.',
+        },
+        {
+          id: randomUUID(),
+          userId: clientId,
+          category: NotificationCategory.MESSAGE,
+          priority: NotificationPriority.HIGH,
+          title: 'Bem-vindo(a) ao acompanhamento!',
+          message: 'Converse com seu treinador para alinhar objetivos da semana.',
+        },
+      ],
+      skipDuplicates: true,
+    });
+  }
+}
+
+async function seedMessaging(trainerId: string, clientIds: string[]) {
+  const [firstClient] = clientIds;
+  if (!firstClient) return;
+
+  const existingThread = await prisma.messageThread.findFirst({
+    where: {
+      participants: {
+        every: {
+          userId: { in: [trainerId, firstClient] },
+        },
+      },
+    },
+  });
+
+  if (existingThread) {
+    return;
+  }
+
+  const threadId = randomUUID();
+  const now = new Date();
+
+  await prisma.messageThread.create({
+    data: {
+      id: threadId,
+      title: 'Plano semanal',
+      createdById: trainerId,
+      lastMessageAt: now,
+      participants: {
+        createMany: {
+          data: [
+            {
+              id: randomUUID(),
+              userId: trainerId,
+              role: 'owner',
+              joinedAt: now,
+              lastReadAt: now,
+            },
+            {
+              id: randomUUID(),
+              userId: firstClient,
+              role: 'member',
+              joinedAt: now,
+            },
+          ],
+        },
+      },
+      messages: {
+        create: [
+          {
+            id: randomUUID(),
+            senderId: trainerId,
+            content: 'Olá! Confira o plano de treinos atualizado para esta semana. Qualquer dúvida me avise por aqui.',
+          },
+          {
+            id: randomUUID(),
+            senderId: firstClient,
+            content: 'Recebido! Vou revisar e retorno se surgir alguma dúvida. Obrigado!',
+            createdAt: new Date(now.getTime() + 5 * 60 * 1000),
+          },
+        ],
+      },
+    },
+  });
+}
+
 async function main() {
   await ensureRoles();
   await ensureAdmin();
@@ -729,6 +844,9 @@ async function main() {
   await seedWorkouts(trainer.id, trainerClients);
   await seedFoodDatabase(trainer.id);
   await seedNutritionPlans(trainer.id, trainerClients);
+  await seedNotificationPreferences([trainer.id, ...trainerClients]);
+  await seedNotifications(trainer.id, trainerClients);
+  await seedMessaging(trainer.id, trainerClients);
 }
 
 main()

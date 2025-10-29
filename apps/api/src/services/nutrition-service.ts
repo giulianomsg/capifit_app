@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 
 import createHttpError from 'http-errors';
 import {
+  NotificationCategory,
+  NotificationPriority,
   NutritionPlanStatus,
   Prisma,
   TrainerClientStatus,
@@ -9,6 +11,7 @@ import {
 
 import { prisma } from '@lib/prisma';
 import { storage } from '@lib/storage';
+import { createNotification } from './notification-service';
 
 interface AuthenticatedUser {
   id: string;
@@ -386,6 +389,16 @@ export async function createNutritionPlan(params: { user: AuthenticatedUser | un
     include: { meals: { include: { items: true } }, client: true },
   });
 
+  await createNotification({
+    userId: plan.clientId,
+    category: NotificationCategory.NUTRITION,
+    priority: NotificationPriority.NORMAL,
+    title: 'Novo plano alimentar disponível',
+    message: `Um novo plano nutricional "${plan.title}" foi publicado.`,
+    data: { planId: plan.id },
+    emailFallback: true,
+  });
+
   const { compliance, totals } = computePlanCompliance(plan);
 
   return {
@@ -455,6 +468,15 @@ export async function saveNutritionAttachment(params: {
       mimeType: params.file.mimetype,
       size: params.file.size,
     },
+  });
+
+  await createNotification({
+    userId: plan.clientId,
+    category: NotificationCategory.NUTRITION,
+    priority: NotificationPriority.LOW,
+    title: 'Novo arquivo no plano nutricional',
+    message: `${attachment.filename} foi adicionado ao plano ${plan.title}.`,
+    data: { planId: plan.id, attachmentId: attachment.id },
   });
 
   return {

@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import App from './App';
 import { AuthProvider } from './contexts/AuthContext';
+import { RealtimeProvider } from './contexts/RealtimeContext';
 import './styles/tailwind.css';
 import './styles/index.css';
 
@@ -16,7 +17,9 @@ root.render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <App />
+        <RealtimeProvider>
+          <App />
+        </RealtimeProvider>
       </AuthProvider>
     </QueryClientProvider>
   </React.StrictMode>,
