@@ -20,18 +20,20 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     'Request failed',
   );
 
+  const statusCode = httpError.status ?? 500;
+
+  let message = httpError.message;
+  if (statusCode >= 500) {
+    message = 'Erro interno do servidor';
+  }
+
   const payload: Record<string, unknown> = {
-    message: httpError.message,
-    code: httpError.status,
+    error: message,
   };
 
-  if (httpError.status === 422 && typeof httpError.payload === 'object') {
-    payload.errors = httpError.payload;
+  if (statusCode === 422 && typeof httpError.payload === 'object') {
+    payload.details = httpError.payload;
   }
 
-  if (httpError.status >= 500) {
-    payload.message = 'An unexpected error occurred. Please try again later.';
-  }
-
-  res.status(httpError.status).json(payload);
+  res.status(statusCode).json(payload);
 }

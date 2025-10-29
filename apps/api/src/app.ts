@@ -6,8 +6,6 @@ import cookie from 'cookie';
 import createHttpError from 'http-errors';
 import pinoHttp from 'pino-http';
 import { RateLimiterMemory } from 'rate-limiter-flexible';
-import 'express-async-errors';
-
 import { env } from '@config/env';
 import { router } from '@routes/index';
 import { errorHandler } from '@middlewares/error-handler';
@@ -80,8 +78,12 @@ app.get('/health', (_req, res) => {
 
 app.use('/api', router);
 
-app.use((_req, _res, next) => {
-  next(createHttpError(404, 'Resource not found'));
+app.use((req, res, next) => {
+  if (res.headersSent) {
+    return next();
+  }
+
+  res.status(404).json({ error: 'Rota não encontrada' });
 });
 
 app.use(errorHandler);
