@@ -48,13 +48,7 @@ export function initializeSocket(server: HttpServer) {
     }
 
     try {
-      const payload = jwt.verify(token, env.JWT_ACCESS_SECRET) as AccessTokenPayload;
-      socket.data.user = {
-        id: payload.sub,
-        email: payload.email,
-        name: payload.name,
-        roles: payload.roles,
-      } satisfies SocketUserContext;
+      socket.data.user = verifyAccessToken(token);
       next();
     } catch (error) {
       logger.warn({ error }, 'Socket authentication failed');
@@ -72,6 +66,35 @@ export function initializeSocket(server: HttpServer) {
         handler(socket);
       } catch (error) {
         logger.error({ error }, 'Socket connection handler failed');
+      }
+    });
+
+    socket.on('auth:refresh', (payload: { token?: string }, callback?: (response: { status: 'ok' } | { status: 'error'; reason: string }) => void) => {
+      const nextToken = typeof payload?.token === 'string' ? payload.token : null;
+      if (!nextToken) {
+        logger.warn('Socket token refresh attempted without token');
+        callback?.({ status: 'error', reason: 'token-missing' });
+        socket.emit('auth:error', { reason: 'token-missing' });
+        socket.disconnect(true);
+        return;
+      }
+
+      try {
+        const previousUserId = socket.data.user?.id;
+        const nextUserContext = verifyAccessToken(nextToken);
+        socket.data.user = nextUserContext;
+
+        if (previousUserId && previousUserId !== nextUserContext.id) {
+          socket.leave(getUserRoom(previousUserId));
+          socket.join(getUserRoom(nextUserContext.id));
+        }
+
+        callback?.({ status: 'ok' });
+      } catch (error) {
+        logger.warn({ error }, 'Socket token refresh failed');
+        callback?.({ status: 'error', reason: 'invalid-token' });
+        socket.emit('auth:error', { reason: 'invalid-token' });
+        socket.disconnect(true);
       }
     });
 
@@ -106,4 +129,14 @@ export function broadcast(event: string, payload: unknown) {
 
 function getUserRoom(userId: string) {
   return `user:${userId}`;
+}
+
+function verifyAccessToken(token: string): SocketUserContext {
+  const payload = jwt.verify(token, env.JWT_ACCESS_SECRET) as AccessTokenPayload;
+  return {
+    id: payload.sub,
+    email: payload.email,
+    name: payload.name,
+    roles: payload.roles,
+  } satisfies SocketUserContext;
 }

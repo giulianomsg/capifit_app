@@ -1,6 +1,11 @@
 import axios from 'axios';
 
+import { loadSession, persistSession } from './authStorage';
+
 const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001/api';
+
+export const SESSION_EXPIRED_EVENT = 'capifit:session-expired';
+export const ACCESS_TOKEN_UPDATED_EVENT = 'capifit:access-token-updated';
 
 export const http = axios.create({
   baseURL,
@@ -10,18 +15,30 @@ export const http = axios.create({
 let accessToken = null;
 let refreshPromise = null;
 
-const emitSessionExpired = () => {
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('capifit:session-expired'));
+const dispatchBrowserEvent = (eventName, detail) => {
+  if (typeof window === 'undefined') {
+    return;
   }
+
+  window.dispatchEvent(new CustomEvent(eventName, { detail }));
+};
+
+const emitSessionExpired = () => {
+  dispatchBrowserEvent(SESSION_EXPIRED_EVENT);
+};
+
+const emitAccessTokenUpdated = (token) => {
+  dispatchBrowserEvent(ACCESS_TOKEN_UPDATED_EVENT, { token });
 };
 
 export function setAccessToken(token) {
   accessToken = token;
+  emitAccessTokenUpdated(token);
 }
 
 export function clearAccessToken() {
   accessToken = null;
+  emitAccessTokenUpdated(null);
 }
 
 export function getAccessToken() {
@@ -59,7 +76,18 @@ http.interceptors.response.use(
             },
           )
           .then((response) => {
-            setAccessToken(response.data.token);
+            const newToken = response.data.token;
+            setAccessToken(newToken);
+
+            try {
+              const session = loadSession();
+              if (session.user) {
+                persistSession({ token: newToken, user: session.user });
+              }
+            } catch (storageError) {
+              console.warn('Failed to persist refreshed session', storageError);
+            }
+
             return response;
           })
           .finally(() => {

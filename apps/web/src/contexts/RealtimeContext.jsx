@@ -2,7 +2,11 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 import { io } from 'socket.io-client';
 
 import { useAuth } from './AuthContext';
-import { getAccessToken } from '../lib/httpClient';
+import {
+  ACCESS_TOKEN_UPDATED_EVENT,
+  SESSION_EXPIRED_EVENT,
+  getAccessToken,
+} from '../lib/httpClient';
 
 const RealtimeContext = createContext({ socket: null });
 
@@ -32,12 +36,62 @@ export function RealtimeProvider({ children }) {
       auth: { token },
     });
 
+    instance.on('connect_error', (error) => {
+      console.error('Realtime connection error', error);
+      if (error?.message && typeof window !== 'undefined') {
+        if (error.message.toLowerCase().includes('auth')) {
+          window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
+        }
+      }
+    });
+
+    instance.on('auth:error', (payload) => {
+      console.error('Realtime authentication error', payload);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
+      }
+    });
+
     setSocket(instance);
 
     return () => {
       instance.disconnect();
     };
   }, [status]);
+
+  useEffect(() => {
+    if (!socket) {
+      return undefined;
+    }
+
+    const handleTokenUpdate = (event) => {
+      const nextToken = event?.detail?.token ?? getAccessToken();
+      if (!nextToken) {
+        socket.disconnect();
+        return;
+      }
+
+      socket.auth = { ...(socket.auth ?? {}), token: nextToken };
+      socket.emit('auth:refresh', { token: nextToken }, (response) => {
+        if (!response || response.status !== 'ok') {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
+          }
+          socket.disconnect();
+        }
+      });
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener(ACCESS_TOKEN_UPDATED_EVENT, handleTokenUpdate);
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener(ACCESS_TOKEN_UPDATED_EVENT, handleTokenUpdate);
+      }
+    };
+  }, [socket]);
 
   const value = useMemo(
     () => ({ socket }),

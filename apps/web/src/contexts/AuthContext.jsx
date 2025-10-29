@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import { clearSession, loadSession, persistSession } from '../lib/authStorage';
-import { clearAccessToken, setAccessToken } from '../lib/httpClient';
+import { SESSION_EXPIRED_EVENT, clearAccessToken, setAccessToken } from '../lib/httpClient';
 import { fetchProfile, login as loginRequest, logout as logoutRequest, register as registerRequest } from '../services/authService';
 
 const AuthContext = createContext(undefined);
@@ -54,9 +54,9 @@ export function AuthProvider({ children }) {
     };
 
     if (typeof window !== 'undefined') {
-      window.addEventListener('capifit:session-expired', handler);
+      window.addEventListener(SESSION_EXPIRED_EVENT, handler);
       return () => {
-        window.removeEventListener('capifit:session-expired', handler);
+        window.removeEventListener(SESSION_EXPIRED_EVENT, handler);
       };
     }
     return undefined;
