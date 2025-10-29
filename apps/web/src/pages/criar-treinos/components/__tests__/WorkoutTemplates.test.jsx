@@ -9,6 +9,7 @@ const mockSocket = {
   off: vi.fn(),
 };
 
+const realtimeState = { socket: mockSocket };
 const invalidateQueriesMock = vi.fn();
 const useQueryMock = vi.fn();
 const useMutationMock = vi.fn();
@@ -20,7 +21,7 @@ vi.mock('@tanstack/react-query', () => ({
 }));
 
 vi.mock('../../../../contexts/RealtimeContext', () => ({
-  useRealtime: () => ({ socket: mockSocket }),
+  useRealtime: () => realtimeState,
 }));
 
 vi.mock('../../../../services/workoutService', () => ({
@@ -35,33 +36,56 @@ describe('WorkoutTemplates realtime synchronisation', () => {
     invalidateQueriesMock.mockReset();
     useQueryMock.mockReset();
     useMutationMock.mockReset();
+    realtimeState.socket = mockSocket;
 
     useQueryMock.mockReturnValue({ data: { data: [] }, isLoading: false });
     useMutationMock.mockReturnValue({ mutate: vi.fn(), isPending: false });
   });
 
-  it('registers socket listeners and invalidates template cache on realtime updates', async () => {
+  it('registra listeners para eventos de treino e invalida o cache para cada atualização', async () => {
     render(<WorkoutTemplates onApplyTemplate={vi.fn()} />);
 
     await waitFor(() => {
       expect(mockSocket.on).toHaveBeenCalledTimes(3);
     });
 
-    const handler = mockSocket.on.mock.calls[0][1];
-    handler();
+    const handlers = mockSocket.on.mock.calls.reduce((acc, [eventName, handler]) => {
+      acc[eventName] = handler;
+      return acc;
+    }, {});
 
+    expect(Object.keys(handlers)).toEqual(
+      expect.arrayContaining(['workout:created', 'workout:updated', 'workout:deleted']),
+    );
+
+    handlers['workout:created']?.();
+    handlers['workout:updated']?.();
+    handlers['workout:deleted']?.();
+
+    expect(invalidateQueriesMock).toHaveBeenCalledTimes(3);
     expect(invalidateQueriesMock).toHaveBeenCalledWith({ queryKey: ['workouts', 'templates'] });
   });
 
-  it('cleans up socket listeners on unmount', async () => {
+  it('limpa os listeners registrados ao desmontar', async () => {
     const { unmount } = render(<WorkoutTemplates onApplyTemplate={vi.fn()} />);
 
     await waitFor(() => {
       expect(mockSocket.on).toHaveBeenCalled();
     });
 
+    const listeners = mockSocket.on.mock.calls.map(([eventName, handler]) => ({ eventName, handler }));
     unmount();
 
-    expect(mockSocket.off).toHaveBeenCalled();
+    listeners.forEach(({ eventName, handler }) => {
+      expect(mockSocket.off).toHaveBeenCalledWith(eventName, handler);
+    });
+  });
+
+  it('não registra listeners quando o socket não está disponível', () => {
+    realtimeState.socket = null;
+
+    render(<WorkoutTemplates onApplyTemplate={vi.fn()} />);
+
+    expect(mockSocket.on).not.toHaveBeenCalled();
   });
 });

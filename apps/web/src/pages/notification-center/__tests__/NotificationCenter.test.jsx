@@ -11,6 +11,7 @@ const mockSocket = {
   off: vi.fn(),
 };
 
+const realtimeState = { socket: mockSocket };
 const fetchNotificationsMock = vi.fn();
 const fetchNotificationPreferencesMock = vi.fn();
 const markNotificationsAsReadMock = vi.fn();
@@ -26,7 +27,7 @@ vi.mock('../../services/notificationService', () => ({
 }));
 
 vi.mock('../../../contexts/RealtimeContext', () => ({
-  useRealtime: () => ({ socket: mockSocket }),
+  useRealtime: () => realtimeState,
 }));
 
 describe('NotificationCenter', () => {
@@ -41,7 +42,9 @@ describe('NotificationCenter', () => {
       },
     });
 
-    return ({ children }) => <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+    const wrapper = ({ children }) => <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+
+    return { wrapper, queryClient };
   };
 
   beforeEach(() => {
@@ -52,6 +55,7 @@ describe('NotificationCenter', () => {
     markNotificationsAsReadMock.mockReset();
     deleteNotificationsMock.mockReset();
     updateNotificationPreferencesMock.mockReset();
+    realtimeState.socket = mockSocket;
 
     fetchNotificationsMock.mockResolvedValue({
       data: [
@@ -90,7 +94,7 @@ describe('NotificationCenter', () => {
   });
 
   it('exibe notificações carregadas do servidor', async () => {
-    const wrapper = createWrapper();
+    const { wrapper } = createWrapper();
     render(<NotificationCenter />, { wrapper });
 
     expect(await screen.findByText('Central de Notificações')).toBeInTheDocument();
@@ -100,7 +104,7 @@ describe('NotificationCenter', () => {
   });
 
   it('marca todas as notificações não lidas como lidas ao acionar o atalho', async () => {
-    const wrapper = createWrapper();
+    const { wrapper } = createWrapper();
     render(<NotificationCenter />, { wrapper });
 
     const markAllButton = await screen.findByRole('button', { name: /marcar todas como lidas/i });
@@ -113,7 +117,7 @@ describe('NotificationCenter', () => {
   });
 
   it('permite alternar preferências de categoria', async () => {
-    const wrapper = createWrapper();
+    const { wrapper } = createWrapper();
     render(<NotificationCenter />, { wrapper });
 
     const preferencesTab = await screen.findByRole('button', { name: /preferências/i });
@@ -124,5 +128,43 @@ describe('NotificationCenter', () => {
 
     await waitFor(() => expect(updateNotificationPreferencesMock).not.toHaveBeenCalled());
     expect(workoutCategoryButton).toHaveClass('border-border');
+  });
+
+  it('invalidates notifications when realtime updates arrive', async () => {
+    const { wrapper, queryClient } = createWrapper();
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+
+    render(<NotificationCenter />, { wrapper });
+
+    await waitFor(() => expect(mockSocket.on).toHaveBeenCalledWith('notification:new', expect.any(Function)));
+    const handler = mockSocket.on.mock.calls.find(([eventName]) => eventName === 'notification:new')[1];
+
+    handler({
+      notification: { id: 'notification-2' },
+      delivery: { email: { requested: false, status: 'not-requested' } },
+    });
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['notifications'] });
+  });
+
+  it('desregistra listeners quando o componente desmonta', async () => {
+    const { wrapper } = createWrapper();
+    const { unmount } = render(<NotificationCenter />, { wrapper });
+
+    await waitFor(() => expect(mockSocket.on).toHaveBeenCalledWith('notification:new', expect.any(Function)));
+    const handler = mockSocket.on.mock.calls.find(([eventName]) => eventName === 'notification:new')[1];
+
+    unmount();
+
+    expect(mockSocket.off).toHaveBeenCalledWith('notification:new', handler);
+  });
+
+  it('não registra listeners quando não há socket disponível', () => {
+    realtimeState.socket = null;
+    const { wrapper } = createWrapper();
+
+    render(<NotificationCenter />, { wrapper });
+
+    expect(mockSocket.on).not.toHaveBeenCalled();
   });
 });
