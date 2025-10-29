@@ -9,23 +9,14 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     ? err
     : createHttpError(500, 'Internal server error', { expose: false });
 
-  logger.error(
-    {
-      err,
-      path: req.path,
-      method: req.method,
-      userId: req.user?.id,
-      statusCode: httpError.status,
-    },
-    'Request failed',
-  );
+  const statusCode =
+    httpError.status ||
+    (typeof err === 'object' && err !== null && 'statusCode' in err && typeof (err as any).statusCode === 'number'
+      ? (err as any).statusCode
+      : undefined) ||
+    500;
 
-  const statusCode = httpError.status ?? 500;
-
-  let message = httpError.message;
-  if (statusCode >= 500) {
-    message = 'Erro interno do servidor';
-  }
+  const message = statusCode >= 500 ? 'Erro interno do servidor' : httpError.message;
 
   const payload: Record<string, unknown> = {
     error: message,
@@ -33,6 +24,22 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
 
   if (statusCode === 422 && typeof httpError.payload === 'object') {
     payload.details = httpError.payload;
+  }
+
+  logger.error(
+    {
+      err,
+      path: req.path,
+      method: req.method,
+      userId: req.user?.id,
+      statusCode,
+    },
+    'Request failed',
+  );
+
+  // Ensure we surface a stack trace in local development for debugging consistency
+  if (process.env.NODE_ENV !== 'production') {
+    console.error(err); // eslint-disable-line no-console
   }
 
   res.status(statusCode).json(payload);

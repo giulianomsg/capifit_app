@@ -8,6 +8,7 @@ CapiFit is a full-stack platform that empowers personal trainers to manage clien
 - **PostgreSQL + Prisma** data layer with migrations, seeds, hashed refresh tokens and audit trail primitives.
 - **React 18 + Vite** frontend, React Query powered session management, guarded routes and axios interceptors with automatic refresh.
 - **Production-ready tooling**: Docker Compose stack (PostgreSQL, Redis, API, Web), PM2 ecosystem file, structured logging, rate limiting, Helmet and CORS hardening.
+- **Express 5 ready**: Erro assíncrono tratado nativamente (sem `express-async-errors`), middleware 404/500 padronizado e overrides globais para evitar regressões.
 - **User management suite**: Admin REST endpoints and React screens for inviting, editing and deactivating accounts with role-aware RBAC and secure avatar uploads.
 - **Testing foundation**: Vitest + Supertest API tests validating authentication flows and error handling.
 - **Realtime ops**: Socket.IO driven notifications center, live chat hub and Redis-backed e-mail queue to keep trainers and clientes sincronizados em tempo real.
@@ -44,50 +45,66 @@ CapiFit is a full-stack platform that empowers personal trainers to manage clien
 
 ## 🚀 Quick Start (local development)
 
-1. **Install dependencies**
+1. **Clone e prepare o diretório de trabalho**
+   ```bash
+   git clone https://github.com/giulianomsg/capifit_app.git
+   cd capifit_app
+   ```
+
+2. **Limpe instalações anteriores (recomendado quando atualizando a stack)**
+   ```bash
+   rm -rf node_modules apps/api/node_modules apps/web/node_modules package-lock.json apps/api/package-lock.json apps/web/package-lock.json
+   npm cache clean --force
+   ```
+
+3. **Instale as dependências usando os workspaces**
    ```bash
    npm install
    ```
+   - O `package.json` raiz define `overrides` que fixam `express@5.1.0` e `eslint@8.57.0`, evitando conflitos com versões antigas.
+   - Se o ambiente corporativo bloquear pacotes (ex.: `@prisma/client`), configure um espelho autorizado ou libere o acesso ao registry oficial (`https://registry.npmjs.org`).
 
-   > ℹ️ If your environment enforces an internal npm proxy, ensure packages such as `@prisma/client` and `pg-mem` are whitelisted; otherwise `npm install` may fail with `403 Forbidden` responses.
-
-2. **Copy environment files**
+4. **Configure as variáveis de ambiente de desenvolvimento**
    ```bash
    cp apps/api/.env.example apps/api/.env
    cp apps/web/.env.example apps/web/.env
    ```
+   Ajuste as URLs, segredos JWT e credenciais de banco/conexões conforme necessário.
 
-3. **Generate Prisma client & run migrations**
+5. **Gere o client Prisma, rode migrações e seeds**
    ```bash
    npm run generate --workspace apps/api
    npm run migrate:dev --workspace apps/api
    npm run seed --workspace apps/api
    ```
 
-4. **Start both applications in watch mode**
+6. **Execute checagens de lint e testes opcionais**
+   ```bash
+   npm run lint
+   npm run test
+   ```
+   Esses comandos utilizam `eslint@8` e Vitest. Caso esteja em ambiente restrito, certifique-se de instalar as dependências antes de rodá-los.
+
+7. **Inicie os serviços em modo desenvolvimento**
    ```bash
    npm run dev
    ```
-   - API available on `http://localhost:3001` (health check at `/health`).
-   - Web available on `http://localhost:5173`.
+   - API disponível em `http://localhost:3001` (verifique `/health`).
+   - Web disponível em `http://localhost:5173`.
 
-5. **Individual services**
-   ```bash
-   npm run dev:api   # API only
-   npm run dev:web   # Web only
-   ```
+   Use os atalhos `npm run dev:api` ou `npm run dev:web` para executar apenas um workspace.
 
 ## 🧪 Testing & Linting
 
 ```bash
 npm run test:api      # Vitest + Supertest (auth, usuários, notificações, chat)
-npm run test:web      # Vitest placeholder (extend with UI tests)
-npm run lint          # Lint API + Web
+npm run test:web      # Vitest + Testing Library (UI realtime)
+npm run lint          # Lint API + Web com ESLint 8
 npm run lint:api
 npm run lint:web
 ```
 
-> **Note:** API tests boot an in-memory PostgreSQL instance (pg-mem) to exercise authentication and user management flows end-to-end without requiring Docker or an external database.
+> **Note:** API tests boot an in-memory PostgreSQL instance (pg-mem) to exercise authentication and user management flows end-to-end without requiring Docker or an external database. O lint utiliza `eslint@8.57.0` alinhado ao `eslint-config-react-app@7.0.1`; se um plugin pedir versão superior, verifique se o `package.json` raiz está respeitando a seção `overrides`.
 
 ## 🏗️ Build & Production Commands
 
@@ -240,6 +257,7 @@ All non-public endpoints require `Authorization: Bearer <access_token>` and will
 | Issue | Resolution |
 |-------|-----------|
 | `npm install` fails due to registry policy | Ensure network access to `https://registry.npmjs.org/` or configure an allowed mirror. |
+| Peer dependency exige `express@4` | Atualize o pacote para uma versão compatível ou remova-o; o monorepo utiliza Express 5.1.0 e bloqueia `express-async-errors` via `overrides`. |
 | Prisma migration errors | Verify `DATABASE_URL`, ensure Postgres is reachable, rerun `npm run migrate:dev`. |
 | Cookies not persisting during local dev | Confirm frontend uses `http://localhost` (not 127.0.0.1) so `SameSite=Strict` cookies are considered same-site. |
 | Docker build failures | Clean previous images (`docker compose down -v`), ensure buildx supports `node:20-alpine`. |
