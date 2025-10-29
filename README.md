@@ -61,7 +61,7 @@ CapiFit is a full-stack platform that empowers personal trainers to manage clien
    ```bash
    npm install
    ```
-   - O `package.json` raiz define `overrides` que fixam `express@5.1.0` e `eslint@8.57.0`, evitando conflitos com versões antigas.
+   - O `package.json` raiz define `overrides` que fixam `express@5.1.0`, `eslint@8.57.0` e padronizam `rate-limiter-flexible@8.1.0`, evitando conflitos com versões antigas ou inexistentes.
    - Se o ambiente corporativo bloquear pacotes (ex.: `@prisma/client`), configure um espelho autorizado ou libere o acesso ao registry oficial (`https://registry.npmjs.org`).
 
 4. **Configure as variáveis de ambiente de desenvolvimento**

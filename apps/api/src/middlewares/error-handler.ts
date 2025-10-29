@@ -7,23 +7,19 @@ import { logger } from '@utils/logger';
 export function errorHandler(err: unknown, req: Request, res: Response, _next: NextFunction) {
   const httpError = createHttpError.isHttpError(err)
     ? err
-    : createHttpError(500, 'Internal server error', { expose: false });
+    : createHttpError(500, 'Erro interno do servidor', { expose: false });
 
-  const statusCode =
+  const status =
     httpError.status ||
     (typeof err === 'object' && err !== null && 'statusCode' in err && typeof (err as any).statusCode === 'number'
       ? (err as any).statusCode
       : undefined) ||
     500;
 
-  const message = statusCode >= 500 ? 'Erro interno do servidor' : httpError.message;
+  const message = (httpError.message ?? 'Erro interno do servidor').trim() || 'Erro interno do servidor';
 
-  const payload: Record<string, unknown> = {
-    error: message,
-  };
-
-  if (statusCode === 422 && typeof httpError.payload === 'object') {
-    payload.details = httpError.payload;
+  if (process.env.NODE_ENV !== 'test') {
+    console.error(err); // eslint-disable-line no-console
   }
 
   logger.error(
@@ -32,15 +28,25 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
       path: req.path,
       method: req.method,
       userId: req.user?.id,
-      statusCode,
+      statusCode: status,
+      rateLimit: req.rateLimit,
     },
     'Request failed',
   );
 
-  // Ensure we surface a stack trace in local development for debugging consistency
-  if (process.env.NODE_ENV !== 'production') {
-    console.error(err); // eslint-disable-line no-console
+  const payload: Record<string, unknown> = { error: status >= 500 ? 'Erro interno do servidor' : message };
+
+  if (status === 422 && typeof httpError.payload === 'object' && httpError.payload !== null) {
+    payload.details = httpError.payload;
   }
 
-  res.status(statusCode).json(payload);
+  if (createHttpError.isHttpError(httpError) && httpError.headers && typeof httpError.headers === 'object') {
+    for (const [header, value] of Object.entries(httpError.headers)) {
+      if (typeof value === 'string') {
+        res.setHeader(header, value);
+      }
+    }
+  }
+
+  res.status(status).json(payload);
 }

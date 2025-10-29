@@ -25,6 +25,7 @@
   },
   "overrides": {
     "eslint": "^8.57.0",
-    "express-async-errors": "0.0.0-empty"
+    "express-async-errors": "0.0.0-empty",
+    "rate-limiter-flexible": "8.1.0"
   }
 }

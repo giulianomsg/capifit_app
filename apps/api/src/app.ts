@@ -5,7 +5,8 @@ import morgan from 'morgan';
 import cookie from 'cookie';
 import createHttpError from 'http-errors';
 import pinoHttp from 'pino-http';
-import { RateLimiterMemory } from 'rate-limiter-flexible';
+import { RateLimiterMemory, type RateLimiterRes } from 'rate-limiter-flexible';
+
 import { env } from '@config/env';
 import { router } from '@routes/index';
 import { errorHandler } from '@middlewares/error-handler';
@@ -15,6 +16,7 @@ import { storage } from '@lib/storage';
 const rateLimiter = new RateLimiterMemory({
   points: env.RATE_LIMIT_MAX,
   duration: Math.floor(env.RATE_LIMIT_WINDOW_MS / 1000),
+  blockDuration: 0,
 });
 
 export const app = express();
@@ -57,13 +59,26 @@ app.use(morgan('combined'));
 
 app.use('/uploads', express.static(storage.baseDir, { maxAge: '1d', immutable: true }));
 
-app.use((req, res, next) => {
-  rateLimiter
-    .consume(req.ip ?? 'anonymous')
-    .then(() => next())
-    .catch(() => {
-      next(createHttpError(429, 'Too many requests'));
-    });
+app.use(async (req, _res, next) => {
+  try {
+    await rateLimiter.consume(req.ip ?? 'anonymous');
+    next();
+  } catch (rateLimiterRes) {
+    const res = rateLimiterRes as RateLimiterRes;
+    const retryAfter = Math.ceil(res.msBeforeNext / 1000);
+    req.rateLimit = {
+      msBeforeNext: res.msBeforeNext,
+      remainingPoints: res.remainingPoints,
+      consumedPoints: res.consumedPoints,
+    };
+    next(
+      createHttpError(429, 'Too many requests', {
+        headers: {
+          'Retry-After': String(Number.isFinite(retryAfter) ? retryAfter : 1),
+        },
+      }),
+    );
+  }
 });
 
 app.use((req, _res, next) => {
@@ -78,11 +93,7 @@ app.get('/health', (_req, res) => {
 
 app.use('/api', router);
 
-app.use((req, res, next) => {
-  if (res.headersSent) {
-    return next();
-  }
-
+app.use((req, res) => {
   res.status(404).json({ error: 'Rota não encontrada' });
 });
 

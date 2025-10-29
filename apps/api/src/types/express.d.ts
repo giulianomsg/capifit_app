@@ -9,6 +9,11 @@ declare global {
       } & Pick<User, 'email' | 'name' | 'status'>;
       cookies: Record<string, string>;
       refreshTokenId?: string;
+      rateLimit?: {
+        msBeforeNext: number;
+        remainingPoints: number;
+        consumedPoints: number;
+      };
     }
   }
 }

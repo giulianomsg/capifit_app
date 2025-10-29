@@ -253,8 +253,8 @@ sudo certbot --nginx -d app.seudominio.com
 
 - **Autenticação JWT**: tokens de acesso (15 min) + refresh (14 dias) com revogação server-side.
 - **Logs estruturados**: Pino registra JSON no stdout (PM2/Docker capturam automaticamente).
-- **Rate limiting**: configurável via `.env` (`RATE_LIMIT_WINDOW_MS`, `RATE_LIMIT_MAX`).
+- **Rate limiting**: configurável via `.env` (`RATE_LIMIT_WINDOW_MS`, `RATE_LIMIT_MAX`) e implementado com `rate-limiter-flexible@8.1.0`.
 - **Backups**: configure rotinas diárias de `pg_dump` e snapshots dos uploads.
 - **Monitoramento**: exponha métricas via ferramentas externas (Prometheus, Grafana). As tabelas `audit_logs` e `notification_jobs` ajudam na auditoria das ações sensíveis.
 
-Seguindo este roteiro, a plataforma roda com Express 5.1.0 sem dependências incompatíveis (`express-async-errors` foi eliminado e bloqueado via `overrides`) e com linting baseado em ESLint 8 para evitar conflitos durante atualizações futuras.
+Seguindo este roteiro, a plataforma roda com Express 5.1.0, `rate-limiter-flexible@8.1.0` e linting baseado em ESLint 8, sem dependências incompatíveis (\`express-async-errors\` permanece bloqueado via \`overrides\`).
