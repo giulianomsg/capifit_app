@@ -15,7 +15,8 @@
     "migrate:dev": "prisma migrate dev",
     "generate": "prisma generate",
     "seed": "prisma db seed",
-    "prisma": "prisma"
+    "prisma": "prisma",
+    "db:bootstrap": "bash ./scripts/bootstrap_db.sh"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
