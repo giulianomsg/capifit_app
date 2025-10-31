@@ -152,6 +152,7 @@ model User {
   progressPhotosAuthored      ProgressPhoto[]       @relation("TrainerProgressPhotos")
   assessmentAttachmentsAsTrainer AssessmentAttachment[] @relation("AssessmentAttachmentTrainer")
   assessmentAttachmentsAsClient  AssessmentAttachment[] @relation("AssessmentAttachmentClient")
+  assessmentTemplatesAsTrainer AssessmentTemplate[] @relation("User_AssessmentTemplatesAsTrainer")
   foodsCreated                Food[]                @relation("FoodCreators")
   nutritionPlansAuthored      NutritionPlan[]       @relation("TrainerNutritionPlans")
   nutritionPlansReceived      NutritionPlan[]       @relation("ClientNutritionPlans")
@@ -160,6 +161,7 @@ model User {
   notificationPreference      NotificationPreference?
   messageThreadsCreated       MessageThread[]       @relation("ThreadCreators")
   threadParticipants          ThreadParticipant[]
+  messageReceipts             MessageReceipt[]      @relation("User_MessageReceipts")
   messagesSent                Message[]             @relation("MessageSenders")
 }
 
@@ -366,7 +368,7 @@ model AssessmentTemplate {
   isDefault   Boolean           @default(false)
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
-  trainer     User?             @relation(fields: [trainerId], references: [id], onDelete: SetNull)
+  trainer     User?             @relation("User_AssessmentTemplatesAsTrainer", fields: [trainerId], references: [id], onDelete: SetNull)
   assessments Assessment[]
 
   @@index([trainerId])
@@ -626,7 +628,7 @@ model ThreadParticipant {
   lastReadAt DateTime?
   thread     MessageThread  @relation(fields: [threadId], references: [id], onDelete: Cascade)
   user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  receipts   MessageReceipt[]
+  receipts   MessageReceipt[]    @relation("Participant_Receipts")
 
   @@unique([threadId, userId])
   @@index([userId])
@@ -650,14 +652,17 @@ model Message {
 }
 
 model MessageReceipt {
-  id         String   @id @default(cuid())
-  messageId  String
-  userId     String
-  readAt     DateTime?
-  deliveredAt DateTime?
-  message    Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             String              @id @default(cuid())
+  messageId      String
+  userId         String
+  participantId  String?
+  readAt         DateTime?
+  deliveredAt    DateTime?
+  message        Message            @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  participant    ThreadParticipant? @relation("Participant_Receipts", fields: [participantId], references: [id], onDelete: Cascade)
+  user           User               @relation("User_MessageReceipts", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([messageId, userId])
   @@index([userId])
+  @@index([participantId])
 }
