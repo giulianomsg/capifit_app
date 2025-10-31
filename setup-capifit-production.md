@@ -61,14 +61,21 @@ O repositório já vem organizado como monorepo npm com workspaces.
 ---
 ## 4. Preparar variáveis de ambiente
 
-Copie os modelos e ajuste valores de produção:
+Execute o script interativo para provisionar o banco e gerar o `.env` da API sem expor senhas:
 ```bash
-cp apps/api/.env.example apps/api/.env
+npm run db:bootstrap --workspace apps/api
+```
+- Informe host/porta/superusuário do Postgres (ou deixe a senha em branco se usar autenticação peer).
+- O script cria/atualiza as bases `capifit_db` e `capifit_shadow`, garante o usuário informado e grava `apps/api/.env` a partir do template `apps/api/.env.example`.
+- Prefere um fluxo manual? Utilize `apps/api/prisma/bootstrap.sql` e edite `apps/api/.env.example` conforme necessário antes de copiá-lo.
+
+Para o frontend, copie e ajuste o template:
+```bash
 cp apps/web/.env.example apps/web/.env
 ```
 
 ### 4.1 Variáveis essenciais da API
-Preencha em `apps/api/.env`:
+Revise `apps/api/.env` gerado para confirmar:
 - `PORT=3001`
 - `API_BASE_URL=https://app.seudominio.com/api`
 - `FRONTEND_URL=https://app.seudominio.com`
@@ -163,10 +170,15 @@ O serviço `web` já entrega a aplicação através de um Nginx interno, expondo
 ### 7.1 PostgreSQL local
 ```bash
 sudo apt install -y postgresql postgresql-contrib
+npm run db:bootstrap --workspace apps/api
+```
+O script `db:bootstrap` solicitará host/porta/senhas e criará os bancos `capifit_db` e `capifit_shadow`, mantendo o `.env` fora do Git.
+
+Prefere executar manualmente via `psql`? Utilize o arquivo SQL de referência:
+```bash
 sudo -u postgres psql -f apps/api/prisma/bootstrap.sql
 ```
-
-O script `bootstrap.sql` é idempotente e provisiona o usuário `capifit_user` com senha padrão (`CAPIFIT_STRONG_PASSWORD`, altere após executar) e os bancos `capifit_db` e `capifit_shadow`. Ajuste `/etc/postgresql/14/main/postgresql.conf` e `pg_hba.conf` conforme necessário para conexões remotas seguras.
+Ajuste `postgresql.conf` e `pg_hba.conf` para garantir autenticação segura (ex.: `scram-sha-256`) e acesso remoto conforme a política da sua infraestrutura.
 
 ### 7.2 Redis
 ```bash

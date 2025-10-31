@@ -1,61 +1,33 @@
-import 'dotenv/config';
-
-import { z } from 'zod';
-
-const envSchema = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  PORT: z.coerce.number().default(3001),
-  API_BASE_URL: z.string().url(),
-  FRONTEND_URL: z.string().url(),
-  DATABASE_URL: z.string().url(),
-  SHADOW_DATABASE_URL: z.string().url().optional(),
-  JWT_ACCESS_SECRET: z.string().min(32),
-  JWT_REFRESH_SECRET: z.string().min(32),
-  JWT_ACCESS_TTL: z.coerce.number().default(900),
-  JWT_REFRESH_TTL: z.coerce.number().default(1209600),
-  PASSWORD_SALT_ROUNDS: z.coerce.number().min(10).default(12),
-  REDIS_URL: z.string().url().optional(),
-  SMTP_HOST: z.string(),
-  SMTP_PORT: z.coerce.number().default(587),
-  SMTP_USER: z.string(),
-  SMTP_PASS: z.string(),
-  SMTP_FROM: z.string(),
-  ENABLE_EMAIL_NOTIFICATIONS: z
-    .union([z.literal('true'), z.literal('false'), z.boolean()])
-    .default('true')
-    .transform((value) => {
-      if (typeof value === 'boolean') return value;
-      return value === 'true';
-    }),
-  FILE_STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
-  FILE_STORAGE_LOCAL_PATH: z.string().optional(),
-  FILE_STORAGE_S3_BUCKET: z.string().optional(),
-  FILE_STORAGE_S3_REGION: z.string().optional(),
-  FILE_STORAGE_S3_ENDPOINT: z.string().optional(),
-  FILE_STORAGE_S3_ACCESS_KEY: z.string().optional(),
-  FILE_STORAGE_S3_SECRET_KEY: z.string().optional(),
-  LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
-  RATE_LIMIT_WINDOW_MS: z.coerce.number().default(900000),
-  RATE_LIMIT_MAX: z.coerce.number().default(100),
-  WEBSOCKET_PATH: z.string().default('/socket.io'),
-  WEBSOCKET_ALLOWED_ORIGINS: z
-    .string()
-    .optional()
-    .transform((value) => {
-      if (!value) return undefined;
-      return value
-        .split(',')
-        .map((origin) => origin.trim())
-        .filter((origin) => origin.length > 0);
-    }),
-  NOTIFICATION_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(50).default(3),
-});
-
-const parsedEnv = envSchema.safeParse(process.env);
-
-if (!parsedEnv.success) {
-  console.error('❌ Invalid environment variables', parsedEnv.error.flatten().fieldErrors);
-  throw new Error('Invalid environment configuration');
-}
-
-export const env = parsedEnv.data;
+export const env = {
+  NODE_ENV: process.env.NODE_ENV ?? 'development',
+  PORT: Number(process.env.PORT ?? 3001),
+  API_BASE_URL: process.env.API_BASE_URL ?? 'http://localhost:3001',
+  FRONTEND_URL: process.env.FRONTEND_URL ?? 'http://localhost:5173',
+  DATABASE_URL: process.env.DATABASE_URL ?? '',
+  SHADOW_DATABASE_URL: process.env.SHADOW_DATABASE_URL ?? '',
+  REDIS_URL: process.env.REDIS_URL ?? '',
+  SMTP_HOST: process.env.SMTP_HOST ?? '',
+  SMTP_PORT: Number(process.env.SMTP_PORT ?? 587),
+  SMTP_USER: process.env.SMTP_USER ?? '',
+  SMTP_PASS: process.env.SMTP_PASS ?? '',
+  SMTP_FROM: process.env.SMTP_FROM ?? 'no-reply@example.com',
+  WEBSOCKET_PATH: process.env.WEBSOCKET_PATH ?? '/socket.io',
+  WEBSOCKET_ALLOWED_ORIGINS: process.env.WEBSOCKET_ALLOWED_ORIGINS ?? '',
+  JWT_ACCESS_SECRET: process.env.JWT_ACCESS_SECRET ?? 'dev-secret',
+  JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET ?? 'dev-secret',
+  JWT_ACCESS_TTL: Number(process.env.JWT_ACCESS_TTL ?? 900),
+  JWT_REFRESH_TTL: Number(process.env.JWT_REFRESH_TTL ?? 1209600),
+  PASSWORD_SALT_ROUNDS: Number(process.env.PASSWORD_SALT_ROUNDS ?? 12),
+  ENABLE_EMAIL_NOTIFICATIONS: process.env.ENABLE_EMAIL_NOTIFICATIONS !== 'false',
+  NOTIFICATION_WORKER_CONCURRENCY: Number(process.env.NOTIFICATION_WORKER_CONCURRENCY ?? 3),
+  FILE_STORAGE_DRIVER: process.env.FILE_STORAGE_DRIVER ?? 'local',
+  FILE_STORAGE_LOCAL_PATH: process.env.FILE_STORAGE_LOCAL_PATH ?? './storage',
+  FILE_STORAGE_S3_BUCKET: process.env.FILE_STORAGE_S3_BUCKET ?? '',
+  FILE_STORAGE_S3_REGION: process.env.FILE_STORAGE_S3_REGION ?? '',
+  FILE_STORAGE_S3_ENDPOINT: process.env.FILE_STORAGE_S3_ENDPOINT ?? '',
+  FILE_STORAGE_S3_ACCESS_KEY: process.env.FILE_STORAGE_S3_ACCESS_KEY ?? '',
+  FILE_STORAGE_S3_SECRET_KEY: process.env.FILE_STORAGE_S3_SECRET_KEY ?? '',
+  LOG_LEVEL: process.env.LOG_LEVEL ?? 'info',
+  RATE_LIMIT_WINDOW_MS: Number(process.env.RATE_LIMIT_WINDOW_MS ?? 15 * 60 * 1000),
+  RATE_LIMIT_MAX: Number(process.env.RATE_LIMIT_MAX ?? 100),
+};

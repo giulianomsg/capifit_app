@@ -66,23 +66,18 @@ CapiFit is a full-stack platform that empowers personal trainers to manage clien
 
 4. **Configure as variáveis de ambiente de desenvolvimento**
    ```bash
-   cp apps/api/.env.example apps/api/.env
    cp apps/web/.env.example apps/web/.env
+   npm run db:bootstrap --workspace apps/api
    ```
-   Ajuste as URLs, segredos JWT e credenciais de banco/conexões conforme necessário.
-
-   Caso esteja inicializando um PostgreSQL do zero, execute o script de bootstrap para criar o usuário/banco esperados:
-
-   ```bash
-   psql -U postgres -h localhost -f apps/api/prisma/bootstrap.sql
-   ```
-
-   O comando é idempotente e garante a existência do usuário `capifit_user` com acesso total ao banco `capifit_db`.
+   - O comando `db:bootstrap` copia `apps/api/.env.example` para `apps/api/.env`, solicita interativamente as credenciais do PostgreSQL e provisiona o usuário/banco exigidos usando `psql`.
+   - As senhas digitadas não são persistidas no repositório (o `.env` permanece ignorado) e o script é idempotente.
+   - Caso o servidor PostgreSQL use autenticação por peer, deixe o campo de senha do superusuário em branco ou ajuste o `pg_hba.conf`.
+   - Prefere fazer manualmente? Consulte `apps/api/prisma/bootstrap.sql` para os comandos SQL correspondentes.
 
 5. **Gere o client Prisma, rode migrações e seeds**
    ```bash
    npm run generate --workspace apps/api
-   npm run migrate:dev --workspace apps/api
+   npm run migrate --workspace apps/api
    npm run seed --workspace apps/api
    ```
 

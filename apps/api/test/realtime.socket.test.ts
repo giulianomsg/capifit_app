@@ -69,7 +69,6 @@ describe('Realtime socket flows', () => {
   let baseUrl: string;
 
   let trainerId: string;
-  let trainerId: string;
   let trainerToken: string;
   let trainerSocket: Socket | null;
 
@@ -176,7 +175,7 @@ describe('Realtime socket flows', () => {
     await new Promise<void>((resolve) => {
       server.close(() => resolve());
     });
-    await prisma.$disconnect();
+    if (globalThis.prisma) { await globalThis.prisma.$disconnect(); }
   });
 
   it('delivers realtime message and notification events and supports marking unread counts via socket', async () => {

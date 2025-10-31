@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-
+import bcrypt from 'bcryptjs';
 import {
   ActivityLevel,
   AssessmentStatus,
@@ -16,10 +16,31 @@ import {
   WorkoutDifficulty,
   WorkoutStatus,
 } from '@prisma/client';
-import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
+/** Helpers **/
+function withTimeToday(hour: number, minute: number) {
+  const d = new Date();
+  d.setHours(hour, minute, 0, 0);
+  return d;
+}
+
+async function upsertByNameOrCreate<T extends { id: string; name: string }>(
+  find: (name: string) => Promise<T | null>,
+  create: () => Promise<T>,
+  update: (id: string) => Promise<T>
+): Promise<T> {
+  // Busca por name; se existir, atualiza via id; se não, cria.
+  // Útil quando "name" não é UNIQUE no schema.
+  const existing = await find((await create).name);
+  if (existing) {
+    return update(existing.id);
+  }
+  return create();
+}
+
+/** Seeds **/
 async function ensureRoles() {
   const roles = [
     { name: 'admin', description: 'Full platform access' },
@@ -252,33 +273,37 @@ async function seedAssessmentTemplates(trainerId: string) {
     },
   ];
 
-  for (const template of templates) {
-    await prisma.assessmentTemplate.upsert({
-      where: { name: template.name },
-      update: {
-        description: template.description,
-        type: template.type,
-        metrics: template.metrics,
-        isDefault: template.isDefault,
-        trainerId: template.isDefault ? null : trainerId,
-      },
-      create: {
-        id: randomUUID(),
-        name: template.name,
-        description: template.description,
-        type: template.type,
-        metrics: template.metrics,
-        isDefault: template.isDefault,
-        trainerId: template.isDefault ? null : trainerId,
-      },
-    });
+  for (const t of templates) {
+    const existing = await prisma.assessmentTemplate.findFirst({ where: { name: t.name } });
+    if (existing) {
+      await prisma.assessmentTemplate.update({
+        where: { id: existing.id },
+        data: {
+          description: t.description,
+          type: t.type,
+          metrics: t.metrics,
+          isDefault: t.isDefault,
+          trainerId: t.isDefault ? null : trainerId,
+        },
+      });
+    } else {
+      await prisma.assessmentTemplate.create({
+        data: {
+          id: randomUUID(),
+          name: t.name,
+          description: t.description,
+          type: t.type,
+          metrics: t.metrics,
+          isDefault: t.isDefault,
+          trainerId: t.isDefault ? null : trainerId,
+        },
+      });
+    }
   }
 }
 
 async function seedAssessments(trainerId: string, clientIds: string[]) {
-  if (!clientIds.length) {
-    return;
-  }
+  if (!clientIds.length) return;
 
   const defaultTemplate = await prisma.assessmentTemplate.findFirst({ where: { isDefault: true } });
   const [firstClient, secondClient] = clientIds;
@@ -298,7 +323,7 @@ async function seedAssessments(trainerId: string, clientIds: string[]) {
           id: randomUUID(),
           trainerId,
           clientId: firstClient,
-          templateId: defaultTemplate?.id,
+          templateId: defaultTemplate?.id ?? null,
           status: AssessmentStatus.COMPLETED,
           type: AssessmentType.COMPLETE,
           scheduledFor: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
@@ -348,7 +373,7 @@ async function seedAssessments(trainerId: string, clientIds: string[]) {
           id: randomUUID(),
           trainerId,
           clientId: secondClient,
-          templateId: defaultTemplate?.id,
+          templateId: defaultTemplate?.id ?? null,
           status: AssessmentStatus.SCHEDULED,
           type: AssessmentType.FOLLOW_UP,
           scheduledFor: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
@@ -442,24 +467,16 @@ async function seedExercises(trainerId: string) {
 }
 
 async function seedWorkouts(trainerId: string, clientIds: string[]) {
-  if (clientIds.length === 0) {
-    return;
-  }
+  if (clientIds.length === 0) return;
 
   const clientId = clientIds[0];
   const exercises = await prisma.exercise.findMany({ where: { deletedAt: null } });
-
-  if (exercises.length < 3) {
-    return;
-  }
+  if (exercises.length < 3) return;
 
   const existing = await prisma.workout.findFirst({
     where: { trainerId, clientId, title: 'Treino força total', deletedAt: null },
   });
-
-  if (existing) {
-    return;
-  }
+  if (existing) return;
 
   const [supino, agachamento, prancha] = exercises;
 
@@ -533,66 +550,11 @@ async function seedWorkouts(trainerId: string, clientIds: string[]) {
 
 async function seedFoodDatabase(trainerId: string) {
   const foods = [
-    {
-      name: 'Arroz branco cozido',
-      slug: 'arroz-branco-cozido',
-      category: 'cereais',
-      servingSize: 100,
-      calories: 128,
-      protein: 2.6,
-      carbs: 26.2,
-      fat: 0.2,
-      fiber: 0.4,
-      origin: 'taco',
-    },
-    {
-      name: 'Feijão preto cozido',
-      slug: 'feijao-preto-cozido',
-      category: 'leguminosas',
-      servingSize: 100,
-      calories: 77,
-      protein: 4.5,
-      carbs: 14.0,
-      fat: 0.5,
-      fiber: 8.4,
-      origin: 'taco',
-    },
-    {
-      name: 'Peito de frango grelhado',
-      slug: 'peito-frango-grelhado',
-      category: 'carnes',
-      servingSize: 100,
-      calories: 165,
-      protein: 31.0,
-      carbs: 0,
-      fat: 3.6,
-      fiber: 0,
-      origin: 'taco',
-    },
-    {
-      name: 'Banana nanica',
-      slug: 'banana-nanica',
-      category: 'frutas',
-      servingSize: 100,
-      calories: 89,
-      protein: 1.1,
-      carbs: 22.8,
-      fat: 0.3,
-      fiber: 2.6,
-      origin: 'taco',
-    },
-    {
-      name: 'Brócolis cozido',
-      slug: 'brocolis-cozido',
-      category: 'vegetais',
-      servingSize: 100,
-      calories: 55,
-      protein: 3.7,
-      carbs: 11.1,
-      fat: 0.6,
-      fiber: 3.8,
-      origin: 'taco',
-    },
+    { name: 'Arroz branco cozido', slug: 'arroz-branco-cozido', category: 'cereais', servingSize: 100, calories: 128, protein: 2.6, carbs: 26.2, fat: 0.2, fiber: 0.4, origin: 'taco' },
+    { name: 'Feijão preto cozido', slug: 'feijao-preto-cozido', category: 'leguminosas', servingSize: 100, calories: 77, protein: 4.5, carbs: 14.0, fat: 0.5, fiber: 8.4, origin: 'taco' },
+    { name: 'Peito de frango grelhado', slug: 'peito-frango-grelhado', category: 'carnes', servingSize: 100, calories: 165, protein: 31.0, carbs: 0, fat: 3.6, fiber: 0, origin: 'taco' },
+    { name: 'Banana nanica', slug: 'banana-nanica', category: 'frutas', servingSize: 100, calories: 89, protein: 1.1, carbs: 22.8, fat: 0.3, fiber: 2.6, origin: 'taco' },
+    { name: 'Brócolis cozido', slug: 'brocolis-cozido', category: 'vegetais', servingSize: 100, calories: 55, protein: 3.7, carbs: 11.1, fat: 0.6, fiber: 3.8, origin: 'taco' },
   ];
 
   for (const food of foods) {
@@ -612,23 +574,16 @@ async function seedFoodDatabase(trainerId: string) {
 }
 
 async function seedNutritionPlans(trainerId: string, clientIds: string[]) {
-  if (!clientIds.length) {
-    return;
-  }
+  if (!clientIds.length) return;
 
   const foods = await prisma.food.findMany({ take: 5, orderBy: { name: 'asc' } });
-  if (!foods.length) {
-    return;
-  }
+  if (!foods.length) return;
 
   const clientId = clientIds[0];
   const existing = await prisma.nutritionPlan.findFirst({
     where: { trainerId, clientId, status: NutritionPlanStatus.ACTIVE },
   });
-
-  if (existing) {
-    return;
-  }
+  if (existing) return;
 
   const plan = await prisma.nutritionPlan.create({
     data: {
@@ -647,13 +602,13 @@ async function seedNutritionPlans(trainerId: string, clientIds: string[]) {
             id: randomUUID(),
             name: 'Café da manhã',
             order: 0,
-            scheduledAt: new Date().setHours(7, 0, 0, 0),
+            scheduledAt: withTimeToday(7, 0),
             notes: 'Adicionar fonte de vitamina C',
             items: {
               create: [
                 {
                   id: randomUUID(),
-                  foodId: foods[3]?.id,
+                  foodId: foods[3]?.id!,
                   quantity: 120,
                   unit: 'g',
                   macros: {
@@ -665,7 +620,7 @@ async function seedNutritionPlans(trainerId: string, clientIds: string[]) {
                 },
                 {
                   id: randomUUID(),
-                  foodId: foods[2]?.id,
+                  foodId: foods[2]?.id!,
                   quantity: 120,
                   unit: 'g',
                   macros: {
@@ -682,13 +637,13 @@ async function seedNutritionPlans(trainerId: string, clientIds: string[]) {
             id: randomUUID(),
             name: 'Almoço',
             order: 1,
-            scheduledAt: new Date().setHours(13, 0, 0, 0),
+            scheduledAt: withTimeToday(13, 0),
             notes: 'Adicionar salada verde',
             items: {
               create: [
                 {
                   id: randomUUID(),
-                  foodId: foods[0]?.id,
+                  foodId: foods[0]?.id!,
                   quantity: 150,
                   unit: 'g',
                   macros: {
@@ -700,7 +655,7 @@ async function seedNutritionPlans(trainerId: string, clientIds: string[]) {
                 },
                 {
                   id: randomUUID(),
-                  foodId: foods[1]?.id,
+                  foodId: foods[1]?.id!,
                   quantity: 100,
                   unit: 'g',
                   macros: {
@@ -783,9 +738,7 @@ async function seedMessaging(trainerId: string, clientIds: string[]) {
     },
   });
 
-  if (existingThread) {
-    return;
-  }
+  if (existingThread) return;
 
   const threadId = randomUUID();
   const now = new Date();

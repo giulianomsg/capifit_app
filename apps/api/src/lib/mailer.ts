@@ -1,37 +1,76 @@
-import nodemailer from 'nodemailer';
+import nodemailer, { Transporter } from 'nodemailer';
 
-import { env } from '@config/env';
-import { logger } from '@utils/logger';
+type MailerConfig = {
+  host: string;
+  port: number;
+  user: string;
+  pass: string;
+  from: string;
+  secure?: boolean;
+};
 
-const transporter = nodemailer.createTransport({
-  host: env.SMTP_HOST,
-  port: env.SMTP_PORT,
-  secure: env.SMTP_PORT === 465,
-  auth: {
-    user: env.SMTP_USER,
-    pass: env.SMTP_PASS,
-  },
-});
+let transporter: Transporter | null = null;
 
-transporter.verify().catch((error) => {
-  logger.warn({ error }, 'SMTP transporter verification failed');
-});
+function getConfig(): MailerConfig {
+  const {
+    SMTP_HOST,
+    SMTP_PORT,
+    SMTP_USER,
+    SMTP_PASS,
+    SMTP_FROM,
+    NODE_ENV,
+  } = process.env;
 
-export interface SendMailOptions {
-  to: string;
-  subject: string;
-  html: string;
-  text?: string;
+  if (!SMTP_HOST || !SMTP_PORT || !SMTP_USER || !SMTP_PASS || !SMTP_FROM) {
+    throw new Error('SMTP env vars missing: SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS/SMTP_FROM');
+  }
+
+  return {
+    host: SMTP_HOST,
+    port: Number(SMTP_PORT),
+    user: SMTP_USER,
+    pass: SMTP_PASS,
+    from: SMTP_FROM,
+    secure: NODE_ENV === 'production' && Number(SMTP_PORT) === 465,
+  };
 }
 
-export async function sendMail(options: SendMailOptions) {
+export function getTransporter(): Transporter {
+  if (transporter) return transporter;
+
+  const cfg = getConfig();
+  transporter = nodemailer.createTransport({
+    host: cfg.host,
+    port: cfg.port,
+    secure: Boolean(cfg.secure),
+    auth: {
+      user: cfg.user,
+      pass: cfg.pass,
+    },
+  });
+
+  return transporter;
+}
+
+export type SendMailInput = {
+  to: string | string[];
+  subject: string;
+  html?: string;
+  text?: string;
+};
+
+export async function sendMail(input: SendMailInput): Promise<void> {
+  const t = getTransporter();
   try {
-    await transporter.sendMail({
-      from: env.SMTP_FROM,
-      ...options,
+    await t.sendMail({
+      from: getConfig().from,
+      to: input.to,
+      subject: input.subject,
+      text: input.text,
+      html: input.html,
     });
-  } catch (error) {
-    logger.error({ error }, 'Failed to send e-mail');
-    throw error;
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to send email: ${message}`);
   }
 }
