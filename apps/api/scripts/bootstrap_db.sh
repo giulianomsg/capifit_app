@@ -46,52 +46,61 @@ psql_admin() {
 
 # ---- Criação/ajuste de ROLE e DATABASES com quoting seguro ----
 psql_admin -h "${PGHOST}" -p "${PGPORT}" -v APPUSER="${APPUSER}" -v APPPASS="${APPPASS}" <<'SQL'
+SELECT format($fmt$
 DO $$
 DECLARE
-  v_user text := :'APPUSER';
-  v_pass text := :'APPPASS';
+  v_user text := %1$L;
+  v_pass text := %2$L;
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = v_user) THEN
-    EXECUTE format('CREATE ROLE %I LOGIN PASSWORD %L', v_user, v_pass);
+    EXECUTE format('CREATE ROLE %%I LOGIN PASSWORD %%L', v_user, v_pass);
   ELSE
-    EXECUTE format('ALTER ROLE %I WITH LOGIN PASSWORD %L', v_user, v_pass);
+    EXECUTE format('ALTER ROLE %%I WITH LOGIN PASSWORD %%L', v_user, v_pass);
   END IF;
 END $$;
+$fmt$, :'APPUSER', :'APPPASS');
+\gexec
 SQL
 
 psql_admin -h "${PGHOST}" -p "${PGPORT}" -v APPUSER="${APPUSER}" -v APPDB="${APPDB}" <<'SQL'
+SELECT format($fmt$
 DO $$
 DECLARE
-  v_db text := :'APPDB';
-  v_user text := :'APPUSER';
+  v_db text := %1$L;
+  v_user text := %2$L;
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = v_db) THEN
-    EXECUTE format('CREATE DATABASE %I OWNER %I', v_db, v_user);
+    EXECUTE format('CREATE DATABASE %%I OWNER %%I', v_db, v_user);
   ELSE
-    EXECUTE format('ALTER DATABASE %I OWNER TO %I', v_db, v_user);
+    EXECUTE format('ALTER DATABASE %%I OWNER TO %%I', v_db, v_user);
   END IF;
 END $$;
+$fmt$, :'APPDB', :'APPUSER');
+\gexec
 SQL
 
 psql_admin -h "${PGHOST}" -p "${PGPORT}" -v APPUSER="${APPUSER}" -v SHADOWDB="${SHADOWDB}" <<'SQL'
+SELECT format($fmt$
 DO $$
 DECLARE
-  v_db text := :'SHADOWDB';
-  v_user text := :'APPUSER';
+  v_db text := %1$L;
+  v_user text := %2$L;
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = v_db) THEN
-    EXECUTE format('CREATE DATABASE %I OWNER %I', v_db, v_user);
+    EXECUTE format('CREATE DATABASE %%I OWNER %%I', v_db, v_user);
   ELSE
-    EXECUTE format('ALTER DATABASE %I OWNER TO %I', v_db, v_user);
+    EXECUTE format('ALTER DATABASE %%I OWNER TO %%I', v_db, v_user);
   END IF;
 END $$;
+$fmt$, :'SHADOWDB', :'APPUSER');
+\gexec
 SQL
 
 psql_admin -h "${PGHOST}" -p "${PGPORT}" -d "${APPDB}" -v APPUSER="${APPUSER}" <<'SQL'
 GRANT ALL ON SCHEMA public TO PUBLIC;
-GRANT ALL ON SCHEMA public TO :'APPUSER';
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES    TO :'APPUSER';
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO :'APPUSER';
+GRANT ALL ON SCHEMA public TO :APPUSER;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES    TO :APPUSER;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO :APPUSER;
 SQL
 
 unset PGPASSWORD || true
@@ -115,4 +124,3 @@ fi
 
 echo "Arquivo ${ENV_FILE} atualizado localmente. (NÃO será commitado)"
 echo "Provisionamento do banco concluído com sucesso."
-
