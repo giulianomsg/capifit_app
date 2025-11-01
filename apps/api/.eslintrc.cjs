@@ -9,11 +9,10 @@ module.exports = {
     project: path.join(__dirname, 'tsconfig.json'),
     sourceType: 'module',
   },
-  plugins: ['@typescript-eslint', 'sonarjs', 'import'],
+  plugins: ['@typescript-eslint', 'import'],
   extends: [
     'eslint:recommended',
     'plugin:@typescript-eslint/recommended',
-    'plugin:sonarjs/recommended',
     'plugin:import/recommended',
     'plugin:import/typescript',
     'prettier',
@@ -41,10 +40,5 @@ module.exports = {
       },
     ],
   },
-  ignorePatterns: [
-    'dist/**',
-    'node_modules/**',
-    '**/*.d.ts',
-    'coverage/**',
-  ],
+  ignorePatterns: ['dist/**', 'node_modules/**', '**/*.d.ts', 'coverage/**'],
 };

@@ -1,7 +1,7 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  entry: ['src/app.ts'],
+  entry: ['src/server.ts'],
   outDir: 'dist',
   format: ['esm'],
   splitting: false,
@@ -9,5 +9,6 @@ export default defineConfig({
   dts: true,
   clean: true,
   target: 'node18',
-  tsconfig: 'tsconfig.json'
+  tsconfig: 'tsconfig.json',
+  shims: false,
 });

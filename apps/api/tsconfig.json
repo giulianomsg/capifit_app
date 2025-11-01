@@ -5,7 +5,15 @@
     "rootDir": "./",
     "baseUrl": ".",
     "paths": {
-      "@config/*": ["src/config/*"]
+      "@config/*": ["src/config/*"],
+      "@lib/*": ["src/lib/*"],
+      "@jobs/*": ["src/jobs/*"],
+      "@services/*": ["src/services/*"],
+      "@repositories/*": ["src/repositories/*"],
+      "@middlewares/*": ["src/middlewares/*"],
+      "@routes/*": ["src/routes/*"],
+      "@utils/*": ["src/utils/*"],
+      "@test/*": ["test/*"]
     },
     "types": ["node"]
   },
