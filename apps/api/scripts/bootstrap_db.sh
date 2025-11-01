@@ -63,36 +63,18 @@ $fmt$, :'APPUSER', :'APPPASS');
 SQL
 
 psql_admin -h "${PGHOST}" -p "${PGPORT}" -v APPUSER="${APPUSER}" -v APPDB="${APPDB}" <<'SQL'
-SELECT format($fmt$
-DO $$
-DECLARE
-  v_db text := %1$L;
-  v_user text := %2$L;
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = v_db) THEN
-    EXECUTE format('CREATE DATABASE %%I OWNER %%I', v_db, v_user);
-  ELSE
-    EXECUTE format('ALTER DATABASE %%I OWNER TO %%I', v_db, v_user);
-  END IF;
-END $$;
-$fmt$, :'APPDB', :'APPUSER');
+SELECT format('CREATE DATABASE %I OWNER %I', :'APPDB', :'APPUSER')
+WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = :'APPDB');
+\gexec
+SELECT format('ALTER DATABASE %I OWNER TO %I', :'APPDB', :'APPUSER');
 \gexec
 SQL
 
 psql_admin -h "${PGHOST}" -p "${PGPORT}" -v APPUSER="${APPUSER}" -v SHADOWDB="${SHADOWDB}" <<'SQL'
-SELECT format($fmt$
-DO $$
-DECLARE
-  v_db text := %1$L;
-  v_user text := %2$L;
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = v_db) THEN
-    EXECUTE format('CREATE DATABASE %%I OWNER %%I', v_db, v_user);
-  ELSE
-    EXECUTE format('ALTER DATABASE %%I OWNER TO %%I', v_db, v_user);
-  END IF;
-END $$;
-$fmt$, :'SHADOWDB', :'APPUSER');
+SELECT format('CREATE DATABASE %I OWNER %I', :'SHADOWDB', :'APPUSER')
+WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = :'SHADOWDB');
+\gexec
+SELECT format('ALTER DATABASE %I OWNER TO %I', :'SHADOWDB', :'APPUSER');
 \gexec
 SQL
 
