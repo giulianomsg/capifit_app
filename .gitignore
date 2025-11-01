@@ -1,8 +1,28 @@
-.DS_Store
+# env files (keep only templates in VCS)
+.env
+apps/api/.env
+apps/web/.env
+.env.local
+*.env.local
+
+# prisma local artifacts
+apps/api/prisma/dev.db
+apps/api/prisma/dev.db-journal
+
+# node
 node_modules
+npm-debug.log*
+yarn.lock
+pnpm-lock.yaml
+
+# OS / editor
+.DS_Store
 .idea
+.vscode/
+
+# project artifacts
 package-lock.json
 /build
-.vscode/
-.idea/
+
+# legacy ignores retained
 vite.config.*s.*
