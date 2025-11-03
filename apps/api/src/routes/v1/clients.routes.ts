@@ -34,7 +34,7 @@ const isoDate = z.preprocess((value) => {
   return parsed;
 }, z.date());
 
-const createClientSchema = z.object({
+const createClientSchema: z.ZodType<CreateClientData> = z.object({
   name: z.string().trim().min(2).max(160),
   email: z.string().email(),
   phone: z
@@ -64,7 +64,7 @@ const updateClientSchema = createClientSchema
   .extend({
     status: z.nativeEnum(TrainerClientStatus).optional(),
     email: z.string().email().optional(),
-  });
+  }) as z.ZodType<UpdateClientData>;
 
 function parseEnumList<T extends string>(value: unknown, allowed: readonly T[]) {
   if (value === undefined) {
@@ -125,7 +125,7 @@ router.post('/', async (req, res, next) => {
       throw createHttpError(401, 'Authentication required');
     }
 
-    const payload = createClientSchema.parse(req.body) as CreateClientData;
+    const payload = createClientSchema.parse(req.body);
 
     const trainerId = typeof req.query.trainerId === 'string' ? optionalId.parse(req.query.trainerId) : undefined;
 
@@ -151,7 +151,7 @@ router.patch('/:assignmentId', async (req, res, next) => {
     }
 
     const assignmentId = optionalId.parse(req.params.assignmentId);
-    const payload = updateClientSchema.parse(req.body) as UpdateClientData;
+    const payload = updateClientSchema.parse(req.body);
 
     const assignment = await updateClientAssignment({
       user: req.user,
