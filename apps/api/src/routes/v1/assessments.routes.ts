@@ -93,7 +93,14 @@ const createAssessmentSchema = z.object({
 
 router.post('/', requireRoles('admin', 'trainer'), async (req, res, next) => {
   try {
-    const payload: AssessmentPayload = createAssessmentSchema.parse(req.body);
+    const parsed = createAssessmentSchema.parse(req.body);
+    const payload: AssessmentPayload = {
+      clientId: parsed.clientId,
+      ...(parsed.templateId !== undefined ? { templateId: parsed.templateId } : {}),
+      ...(parsed.scheduledFor !== undefined ? { scheduledFor: parsed.scheduledFor } : {}),
+      ...(parsed.notes !== undefined ? { notes: parsed.notes } : {}),
+      ...(parsed.type !== undefined ? { type: parsed.type } : {}),
+    };
     const assessment = await createAssessment({
       user: req.user,
       data: payload,
