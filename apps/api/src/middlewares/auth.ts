@@ -3,6 +3,8 @@ import createHttpError from 'http-errors';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 
+import type { UserStatus } from '@prisma/client';
+
 import { env } from '@config/env';
 import { prisma } from '@lib/prisma';
 
@@ -10,7 +12,7 @@ interface AccessTokenPayload {
   sub: string;
   email: string;
   name: string;
-  status: string;
+  status: UserStatus;
   roles: string[];
   jti: string;
   exp: number;
@@ -32,7 +34,7 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction) {
       id: payload.sub,
       email: payload.email,
       name: payload.name,
-      status: payload.status as AccessTokenPayload['status'],
+      status: payload.status,
       roles: payload.roles,
     };
     next();
