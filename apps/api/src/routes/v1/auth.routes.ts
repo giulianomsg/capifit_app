@@ -24,6 +24,9 @@ const loginSchema = z.object({
   password: z.string().min(8),
 });
 
+type RegisterInput = z.infer<typeof registerSchema>;
+type LoginInput = z.infer<typeof loginSchema>;
+
 const authResponse = (data: {
   token: string;
   user: {
@@ -49,11 +52,12 @@ export const authRouter = Router();
 
 authRouter.post('/register', async (req, res, next) => {
   try {
-    const result = registerSchema.safeParse(req.body);
-    if (!result.success) {
-      throw createHttpError(422, 'Validation failed', { errors: result.error.flatten() });
+    const parsed = registerSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw createHttpError(422, 'Validation failed', { errors: parsed.error.flatten() });
     }
-    const authResult = await registerUser(result.data);
+    const payload: RegisterInput = parsed.data;
+    const authResult = await registerUser(payload);
 
     res
       .cookie('refreshToken', authResult.refreshToken, cookieOptions(authResult.refreshTokenExpiresAt))
@@ -71,11 +75,12 @@ authRouter.post('/register', async (req, res, next) => {
 
 authRouter.post('/login', async (req, res, next) => {
   try {
-    const result = loginSchema.safeParse(req.body);
-    if (!result.success) {
-      throw createHttpError(422, 'Validation failed', { errors: result.error.flatten() });
+    const parsed = loginSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw createHttpError(422, 'Validation failed', { errors: parsed.error.flatten() });
     }
-    const authResult = await authenticateUser(result.data);
+    const payload: LoginInput = parsed.data;
+    const authResult = await authenticateUser(payload);
 
     res
       .cookie('refreshToken', authResult.refreshToken, cookieOptions(authResult.refreshTokenExpiresAt))
