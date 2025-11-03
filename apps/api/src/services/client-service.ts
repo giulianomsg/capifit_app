@@ -32,7 +32,7 @@ interface ListClientsFilters {
   trainerId?: string;
 }
 
-interface CreateClientInput {
+export interface CreateClientInput {
   user: AuthenticatedUser;
   trainerId?: string;
   data: {
@@ -77,6 +77,9 @@ interface UpdateClientInput {
     status?: TrainerClientStatus;
   };
 }
+
+export type CreateClientData = CreateClientInput['data'];
+export type UpdateClientData = UpdateClientInput['data'];
 
 interface RemoveClientInput {
   user: AuthenticatedUser;

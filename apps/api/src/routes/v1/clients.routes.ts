@@ -14,6 +14,8 @@ import {
   listClients,
   removeClientAssignment,
   updateClientAssignment,
+  type CreateClientData,
+  type UpdateClientData,
 } from '../../services/client-service';
 
 const router = Router();
@@ -63,9 +65,6 @@ const updateClientSchema = createClientSchema
     status: z.nativeEnum(TrainerClientStatus).optional(),
     email: z.string().email().optional(),
   });
-
-type CreateClientPayload = z.infer<typeof createClientSchema>;
-type UpdateClientPayload = z.infer<typeof updateClientSchema>;
 
 function parseEnumList<T extends string>(value: unknown, allowed: readonly T[]) {
   if (value === undefined) {
@@ -126,7 +125,8 @@ router.post('/', async (req, res, next) => {
       throw createHttpError(401, 'Authentication required');
     }
 
-    const payload: CreateClientPayload = createClientSchema.parse(req.body);
+    const parsed = createClientSchema.parse(req.body);
+    const payload: CreateClientData = { ...parsed };
 
     const trainerId = typeof req.query.trainerId === 'string' ? optionalId.parse(req.query.trainerId) : undefined;
 
@@ -152,7 +152,8 @@ router.patch('/:assignmentId', async (req, res, next) => {
     }
 
     const assignmentId = optionalId.parse(req.params.assignmentId);
-    const payload: UpdateClientPayload = updateClientSchema.parse(req.body);
+    const parsed = updateClientSchema.parse(req.body);
+    const payload: UpdateClientData = { ...parsed };
 
     const assignment = await updateClientAssignment({
       user: req.user,
