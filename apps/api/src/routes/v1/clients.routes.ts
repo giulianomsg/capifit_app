@@ -81,6 +81,9 @@ type _UpdateClientSchemaCheck = UpdateClientPayload extends UpdateClientData
     : never
   : never;
 
+const toCreateClientData = (payload: CreateClientPayload): CreateClientData => payload;
+const toUpdateClientData = (payload: UpdateClientPayload): UpdateClientData => payload;
+
 function parseEnumList<T extends string>(value: unknown, allowed: readonly T[]) {
   if (value === undefined) {
     return undefined;
@@ -140,7 +143,7 @@ router.post('/', async (req, res, next) => {
       throw createHttpError(401, 'Authentication required');
     }
 
-    const payload: CreateClientData = createClientSchema.parse(req.body);
+    const payload = toCreateClientData(createClientSchema.parse(req.body));
 
     const trainerId = typeof req.query.trainerId === 'string' ? optionalId.parse(req.query.trainerId) : undefined;
 
@@ -166,7 +169,7 @@ router.patch('/:assignmentId', async (req, res, next) => {
     }
 
     const assignmentId = optionalId.parse(req.params.assignmentId);
-    const payload: UpdateClientData = updateClientSchema.parse(req.body);
+    const payload = toUpdateClientData(updateClientSchema.parse(req.body));
 
     const assignment = await updateClientAssignment({
       user: req.user,
