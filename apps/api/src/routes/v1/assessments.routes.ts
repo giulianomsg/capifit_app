@@ -22,6 +22,7 @@ import {
   saveAssessmentAttachment,
   saveProgressPhoto,
   updateAssessment,
+  type AssessmentPayload,
 } from '@services/assessment-service';
 
 const router = Router();
@@ -92,8 +93,11 @@ const createAssessmentSchema = z.object({
 
 router.post('/', requireRoles('admin', 'trainer'), async (req, res, next) => {
   try {
-    const body = createAssessmentSchema.parse(req.body);
-    const assessment = await createAssessment({ user: req.user, data: body });
+    const payload: AssessmentPayload = createAssessmentSchema.parse(req.body);
+    const assessment = await createAssessment({
+      user: req.user,
+      data: payload,
+    });
     res.status(201).json({ assessment });
   } catch (error) {
     next(error);

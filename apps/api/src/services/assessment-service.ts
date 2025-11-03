@@ -19,7 +19,7 @@ interface AuthenticatedUser {
   roles: string[];
 }
 
-interface AssessmentPayload {
+export interface AssessmentPayload {
   clientId: string;
   templateId?: string | null;
   scheduledFor?: Date | string | null;
