@@ -1,4 +1,4 @@
-import { Queue, QueueScheduler, Worker, type JobsOptions } from 'bullmq';
+import { Queue, Worker, type JobsOptions } from 'bullmq';
 
 import { env } from '@config/env';
 import { getRedisClient } from '@lib/redis';
@@ -17,10 +17,10 @@ export interface EmailNotificationJob {
 const QUEUE_NAME = 'notifications:email';
 
 let queue: Queue<EmailNotificationJob> | null = null;
-let scheduler: QueueScheduler | null = null;
-let schedulerReady: Promise<void> | null = null;
 let worker: Worker<EmailNotificationJob> | null = null;
 let isStopping = false;
+let queueReady: Promise<void> | null = null;
+let queueReadyResolved = false;
 
 function ensureInfrastructure() {
   if (!env.ENABLE_EMAIL_NOTIFICATIONS) {
@@ -47,24 +47,23 @@ function ensureInfrastructure() {
         logger.error({ error }, 'Notification queue error');
       });
 
-      scheduler = new QueueScheduler(QUEUE_NAME, { connection });
-      scheduler.on('error', (error) => {
-        logger.error({ error }, 'Notification queue scheduler error');
-      });
+      queueReadyResolved = false;
 
-      schedulerReady = scheduler
+      queueReady = queue
         .waitUntilReady()
         .then(() => {
-          logger.info('Notification queue scheduler ready');
+          queueReadyResolved = true;
+          logger.info('Notification queue ready');
         })
         .catch((error) => {
-          logger.error({ error }, 'Notification queue scheduler failed to start');
+          queueReadyResolved = false;
+          logger.error({ error }, 'Notification queue failed to become ready');
         });
     } catch (error) {
       logger.error({ error }, 'Failed to initialize notification queue infrastructure');
       queue = null;
-      scheduler = null;
-      schedulerReady = null;
+      queueReady = null;
+      queueReadyResolved = false;
       return null;
     }
   }
@@ -134,7 +133,7 @@ export function startNotificationWorker() {
     logger.error({ error }, 'Notification worker error');
   });
 
-  void Promise.all([schedulerReady ?? Promise.resolve(), worker.waitUntilReady()])
+  void Promise.all([queueReady ?? Promise.resolve(), worker.waitUntilReady()])
     .then(() => {
       logger.info(
         {
@@ -167,18 +166,6 @@ export async function stopNotificationWorker() {
   }
 
   try {
-    if (scheduler) {
-      await scheduler.close();
-      logger.info('Notification queue scheduler stopped');
-    }
-  } catch (error) {
-    logger.error({ error }, 'Failed to stop notification scheduler');
-  } finally {
-    scheduler = null;
-    schedulerReady = null;
-  }
-
-  try {
     if (queue) {
       await queue.close();
       logger.info('Notification queue closed');
@@ -187,6 +174,8 @@ export async function stopNotificationWorker() {
     logger.error({ error }, 'Failed to close notification queue');
   } finally {
     queue = null;
+    queueReady = null;
+    queueReadyResolved = false;
     isStopping = false;
   }
 }
@@ -206,12 +195,13 @@ export async function getNotificationQueueHealth() {
         paused: 0,
       };
 
-  const schedulerRunning = scheduler?.isRunning() ?? false;
+  // BullMQ v5 removes QueueScheduler; expose legacy flag based on queue readiness.
+  const schedulerRunning = queueReadyResolved;
   const workerRunning = worker?.isRunning() ?? false;
 
   const status = !env.ENABLE_EMAIL_NOTIFICATIONS
     ? 'disabled'
-    : queueInstance && redisStatus === 'ready' && schedulerRunning && workerRunning
+    : queueInstance && redisStatus === 'ready' && queueReadyResolved && workerRunning
     ? 'ready'
     : 'degraded';
 
