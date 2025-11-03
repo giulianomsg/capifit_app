@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { z } from 'zod';
 
+import { AssessmentType } from '@prisma/client';
+
 import { requireAuth, requireRoles } from '@middlewares/auth';
 import {
   assessmentDocumentUpload,
@@ -85,7 +87,7 @@ const createAssessmentSchema = z.object({
   templateId: z.string().cuid().nullable().optional(),
   scheduledFor: z.string().datetime().nullable().optional(),
   notes: z.string().max(2000).nullable().optional(),
-  type: z.string().nullable().optional(),
+  type: z.nativeEnum(AssessmentType).nullable().optional(),
 });
 
 router.post('/', requireRoles('admin', 'trainer'), async (req, res, next) => {

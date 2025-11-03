@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import createHttpError from 'http-errors';
 import {
   AssessmentStatus,
+  AssessmentType,
   NotificationCategory,
   NotificationPriority,
   Prisma,
@@ -23,7 +24,7 @@ interface AssessmentPayload {
   templateId?: string | null;
   scheduledFor?: Date | string | null;
   notes?: string | null;
-  type?: string | null;
+  type?: AssessmentType | null;
 }
 
 interface CompleteAssessmentPayload {
@@ -171,13 +172,14 @@ export async function getAssessmentOverview(params: { user: AuthenticatedUser | 
           ...(trainerScope ? { trainerId: trainerScope } : {}),
         },
       }),
-      prisma.assessment.groupBy({
+      prisma.assessment.findMany({
         where: {
           ...assessmentWhere,
           status: AssessmentStatus.COMPLETED,
           performedAt: { gte: new Date(now.getFullYear(), now.getMonth() - 2, now.getDate()) },
         },
-        by: ['clientId'],
+        distinct: ['clientId'],
+        select: { clientId: true },
       }),
     ]);
 
@@ -428,7 +430,10 @@ export async function updateAssessment(params: {
     payload.performedAt = params.data.performedAt ? new Date(params.data.performedAt) : null;
   }
   if (params.data.metrics !== undefined) {
-    payload.metrics = params.data.metrics;
+    payload.metrics =
+      params.data.metrics === null
+        ? Prisma.JsonNull
+        : (params.data.metrics as Prisma.InputJsonValue);
   }
   if (params.data.notes !== undefined) {
     payload.notes = params.data.notes;
@@ -581,7 +586,12 @@ export async function createMeasurementRecord(params: {
       calf: params.payload.calf ?? undefined,
       neck: params.payload.neck ?? undefined,
       notes: params.payload.notes ?? undefined,
-      data: params.payload.data ?? undefined,
+      data:
+        params.payload.data === null
+          ? Prisma.JsonNull
+          : params.payload.data === undefined
+          ? undefined
+          : (params.payload.data as Prisma.InputJsonValue),
     },
     include: { assessment: true },
   });
