@@ -139,17 +139,39 @@ function buildFoodResponse(food: Prisma.FoodGetPayload<{}>) {
   };
 }
 
-function computePlanCompliance(plan: Prisma.NutritionPlanGetPayload<{
+type MealWithItems = Prisma.NutritionPlanGetPayload<{
   include: { meals: { include: { items: true } } };
-}>) {
+}>;
+
+type MealItemWithJsonMacros = MealWithItems['meals'][number]['items'][number];
+
+function coerceMacros(macros: MealItemWithJsonMacros['macros']) {
+  if (macros === null || macros === undefined) {
+    return null;
+  }
+
+  if (typeof macros !== 'object' || Array.isArray(macros)) {
+    return null;
+  }
+
+  return {
+    calories: Number((macros as Prisma.InputJsonObject).calories ?? 0),
+    protein: Number((macros as Prisma.InputJsonObject).protein ?? 0),
+    carbs: Number((macros as Prisma.InputJsonObject).carbs ?? 0),
+    fat: Number((macros as Prisma.InputJsonObject).fat ?? 0),
+  };
+}
+
+function computePlanCompliance(plan: MealWithItems) {
   const totals = plan.meals.reduce(
     (acc, meal) => {
       for (const item of meal.items) {
-        if (item.macros) {
-          acc.calories += Number(item.macros.calories ?? 0);
-          acc.protein += Number(item.macros.protein ?? 0);
-          acc.carbs += Number(item.macros.carbs ?? 0);
-          acc.fat += Number(item.macros.fat ?? 0);
+        const macros = coerceMacros(item.macros);
+        if (macros) {
+          acc.calories += macros.calories;
+          acc.protein += macros.protein;
+          acc.carbs += macros.carbs;
+          acc.fat += macros.fat;
         }
       }
       return acc;
