@@ -52,8 +52,8 @@ export const authRouter = Router();
 
 authRouter.post('/register', async (req, res, next) => {
   try {
-    const payload: RegisterInput = registerSchema.parse(req.body);
-    const authResult = await registerUser(payload);
+    const { name, email, password, roles }: RegisterInput = registerSchema.parse(req.body);
+    const authResult = await registerUser({ name, email, password, roles });
 
     res
       .cookie('refreshToken', authResult.refreshToken, cookieOptions(authResult.refreshTokenExpiresAt))
@@ -74,8 +74,8 @@ authRouter.post('/register', async (req, res, next) => {
 
 authRouter.post('/login', async (req, res, next) => {
   try {
-    const payload: LoginInput = loginSchema.parse(req.body);
-    const authResult = await authenticateUser(payload);
+    const { email, password }: LoginInput = loginSchema.parse(req.body);
+    const authResult = await authenticateUser({ email, password });
 
     res
       .cookie('refreshToken', authResult.refreshToken, cookieOptions(authResult.refreshTokenExpiresAt))
