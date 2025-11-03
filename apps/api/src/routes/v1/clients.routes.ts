@@ -64,6 +64,9 @@ const updateClientSchema = createClientSchema
     email: z.string().email().optional(),
   });
 
+type CreateClientPayload = z.infer<typeof createClientSchema>;
+type UpdateClientPayload = z.infer<typeof updateClientSchema>;
+
 function parseEnumList<T extends string>(value: unknown, allowed: readonly T[]) {
   if (value === undefined) {
     return undefined;
@@ -123,21 +126,21 @@ router.post('/', async (req, res, next) => {
       throw createHttpError(401, 'Authentication required');
     }
 
-    const result = createClientSchema.safeParse(req.body);
-    if (!result.success) {
-      throw createHttpError(422, 'Validation failed', { errors: result.error.flatten() });
-    }
+    const payload: CreateClientPayload = createClientSchema.parse(req.body);
 
     const trainerId = typeof req.query.trainerId === 'string' ? optionalId.parse(req.query.trainerId) : undefined;
 
     const assignment = await createClientAssignment({
       user: req.user,
       trainerId,
-      data: result.data,
+      data: payload,
     });
 
     res.status(201).json({ client: assignment });
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return next(createHttpError(422, 'Validation failed', { errors: error.flatten() }));
+    }
     next(error);
   }
 });
@@ -149,19 +152,19 @@ router.patch('/:assignmentId', async (req, res, next) => {
     }
 
     const assignmentId = optionalId.parse(req.params.assignmentId);
-    const result = updateClientSchema.safeParse(req.body);
-    if (!result.success) {
-      throw createHttpError(422, 'Validation failed', { errors: result.error.flatten() });
-    }
+    const payload: UpdateClientPayload = updateClientSchema.parse(req.body);
 
     const assignment = await updateClientAssignment({
       user: req.user,
       assignmentId,
-      data: result.data,
+      data: payload,
     });
 
     res.json({ client: assignment });
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return next(createHttpError(422, 'Validation failed', { errors: error.flatten() }));
+    }
     next(error);
   }
 });
