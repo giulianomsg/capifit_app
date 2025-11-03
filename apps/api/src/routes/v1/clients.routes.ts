@@ -125,8 +125,7 @@ router.post('/', async (req, res, next) => {
       throw createHttpError(401, 'Authentication required');
     }
 
-    const parsed = createClientSchema.parse(req.body);
-    const payload: CreateClientData = { ...parsed };
+    const payload = createClientSchema.parse(req.body) as CreateClientData;
 
     const trainerId = typeof req.query.trainerId === 'string' ? optionalId.parse(req.query.trainerId) : undefined;
 
@@ -152,8 +151,7 @@ router.patch('/:assignmentId', async (req, res, next) => {
     }
 
     const assignmentId = optionalId.parse(req.params.assignmentId);
-    const parsed = updateClientSchema.parse(req.body);
-    const payload: UpdateClientData = { ...parsed };
+    const payload = updateClientSchema.parse(req.body) as UpdateClientData;
 
     const assignment = await updateClientAssignment({
       user: req.user,
