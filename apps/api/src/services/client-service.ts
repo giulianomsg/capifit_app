@@ -514,16 +514,20 @@ export async function updateClientAssignment(input: UpdateClientInput) {
       select: CLIENT_SELECT,
     });
 
+    const metadata: Prisma.JsonValue = JSON.parse(
+      JSON.stringify({
+        trainerId: refreshed.trainerId,
+        clientId: refreshed.clientId,
+        updates: data,
+      }),
+    );
+
     await recordAuditLog({
       userId: user.id,
       action: 'client.update',
       entity: 'trainer_client',
       entityId: assignment.id,
-      metadata: {
-        trainerId: refreshed.trainerId,
-        clientId: refreshed.clientId,
-        updates: data,
-      },
+      metadata,
     });
 
     return refreshed;
