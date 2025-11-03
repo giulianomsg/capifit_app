@@ -208,7 +208,7 @@ export async function updatePreferences(userId: string, payload: unknown) {
     action: 'notifications.update_preferences',
     entity: 'NotificationPreference',
     entityId: preference.id,
-    metadata: preference,
+    metadata: JSON.parse(JSON.stringify(preference)) as Prisma.JsonValue,
   });
 
   return preference;
