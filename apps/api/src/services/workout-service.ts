@@ -563,12 +563,14 @@ export async function updateWorkout(user: AuthenticatedUser, id: string, payload
     select: workoutSelect,
   });
 
+  const metadata = JSON.parse(JSON.stringify(data)) as Prisma.JsonValue;
+
   await recordAuditLog({
     userId: user.id,
     action: 'workout.update',
     entity: 'workout',
     entityId: id,
-    metadata: data,
+    metadata,
   });
 
   const previousClientId = workout.clientId ?? null;
@@ -590,7 +592,7 @@ export async function updateWorkout(user: AuthenticatedUser, id: string, payload
   if (nextClientId && !updated.isTemplate) {
     let notificationTitle: string | null = null;
     let message: string | null = null;
-    let priority = NotificationPriority.NORMAL;
+    let priority: NotificationPriority = NotificationPriority.NORMAL;
     let emailFallback = false;
 
     if (clientChanged) {
