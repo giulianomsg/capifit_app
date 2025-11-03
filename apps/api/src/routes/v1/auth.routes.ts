@@ -16,7 +16,7 @@ const registerSchema = z.object({
   name: z.string().min(2).max(120),
   email: z.string().email(),
   password: z.string().min(8),
-  roles: z.array(z.enum(['admin', 'trainer', 'client'])).nonempty(),
+  roles: z.array(z.enum(['admin', 'trainer', 'client'])).min(1),
 });
 
 const loginSchema = z.object({
@@ -52,11 +52,7 @@ export const authRouter = Router();
 
 authRouter.post('/register', async (req, res, next) => {
   try {
-    const parsed = registerSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw createHttpError(422, 'Validation failed', { errors: parsed.error.flatten() });
-    }
-    const payload: RegisterInput = parsed.data;
+    const payload: RegisterInput = registerSchema.parse(req.body);
     const authResult = await registerUser(payload);
 
     res
@@ -69,17 +65,16 @@ authRouter.post('/register', async (req, res, next) => {
         }),
       );
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return next(createHttpError(422, 'Validation failed', { errors: error.flatten() }));
+    }
     next(error);
   }
 });
 
 authRouter.post('/login', async (req, res, next) => {
   try {
-    const parsed = loginSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw createHttpError(422, 'Validation failed', { errors: parsed.error.flatten() });
-    }
-    const payload: LoginInput = parsed.data;
+    const payload: LoginInput = loginSchema.parse(req.body);
     const authResult = await authenticateUser(payload);
 
     res
@@ -91,6 +86,9 @@ authRouter.post('/login', async (req, res, next) => {
         }),
       );
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return next(createHttpError(422, 'Validation failed', { errors: error.flatten() }));
+    }
     next(error);
   }
 });
