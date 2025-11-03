@@ -2,6 +2,8 @@ import { Router } from 'express';
 import createHttpError from 'http-errors';
 import { z } from 'zod';
 
+import { UserStatus } from '@prisma/client';
+
 import { requireAuth, requireRoles } from '@middlewares/auth';
 import { avatarUpload } from '@middlewares/upload';
 import {
@@ -14,6 +16,8 @@ import {
   updateUserAvatar,
 } from '@services/user-service';
 
+const userStatusValues = new Set(Object.values(UserStatus));
+
 const paginationSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   perPage: z.coerce.number().int().min(1).max(100).default(20),
@@ -25,7 +29,18 @@ const paginationSchema = z.object({
   statuses: z
     .string()
     .optional()
-    .transform((value) => (value ? value.split(',').map((status) => status.trim()).filter(Boolean) : undefined)),
+    .transform((value) => {
+      if (!value) {
+        return undefined;
+      }
+
+      const parsed = value
+        .split(',')
+        .map((status) => status.trim())
+        .filter((status): status is UserStatus => userStatusValues.has(status as UserStatus));
+
+      return parsed.length ? parsed : undefined;
+    }),
   includeDeleted: z.coerce.boolean().optional().default(false),
 });
 
@@ -33,7 +48,7 @@ const baseUserSchema = z.object({
   name: z.string().min(2).max(120),
   email: z.string().email(),
   phone: z.string().min(8).max(20).optional(),
-  status: z.enum(['ACTIVE', 'INACTIVE', 'INVITED']).optional(),
+  status: z.nativeEnum(UserStatus).optional(),
   roles: z.array(z.enum(['admin', 'trainer', 'client'])).nonempty(),
 });
 

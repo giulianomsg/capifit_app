@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import createHttpError from 'http-errors';
-import { Prisma } from '@prisma/client';
+import { Prisma, UserStatus } from '@prisma/client';
 
 import { env } from '@config/env';
 import { prisma } from '@lib/prisma';
@@ -54,7 +54,7 @@ export async function listUsers(params: {
   perPage?: number;
   search?: string;
   roles?: string[];
-  statuses?: string[];
+  statuses?: UserStatus[];
   includeDeleted?: boolean;
 }) {
   ensureAdmin(params.user);
@@ -75,7 +75,7 @@ export async function listUsers(params: {
   }
 
   if (params.statuses?.length) {
-    where.status = { in: params.statuses as any };
+    where.status = { in: params.statuses };
   }
 
   if (params.roles?.length) {
@@ -147,7 +147,7 @@ export async function createUserAccount(params: {
     email: string;
     password: string;
     phone?: string;
-    status?: Prisma.UserStatus;
+    status?: UserStatus;
     roles: string[];
   };
 }) {
@@ -170,7 +170,7 @@ export async function createUserAccount(params: {
       name: params.data.name,
       email: params.data.email,
       phone: params.data.phone,
-      status: params.data.status ?? 'ACTIVE',
+      status: params.data.status ?? UserStatus.ACTIVE,
       passwordHash,
       roles: {
         create: roles.map((role) => ({ role: { connect: { id: role.id } } })),
@@ -197,7 +197,7 @@ export async function updateUserAccount(params: {
     name?: string;
     email?: string;
     phone?: string;
-    status?: Prisma.UserStatus;
+    status?: UserStatus;
     roles?: string[];
     password?: string;
   };
@@ -278,7 +278,7 @@ export async function removeUserAccount(params: { user: AuthenticatedUser | unde
 
   await prisma.user.update({
     where: { id: params.userId },
-    data: { deletedAt: new Date(), status: 'INACTIVE' },
+    data: { deletedAt: new Date(), status: UserStatus.INACTIVE },
   });
 
   await recordAuditLog({
