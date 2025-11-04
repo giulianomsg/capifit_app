@@ -66,13 +66,10 @@ O repositório já vem organizado como monorepo npm com workspaces.
 ---
 ## 4. Preparar variáveis de ambiente
 
-Execute o script interativo para provisionar o banco e gerar o `.env` da API sem expor senhas:
-```bash
-npm run db:bootstrap --workspace apps/api
-```
-- Informe host/porta/superusuário do Postgres (ou deixe a senha em branco se usar autenticação peer).
-- O script cria/atualiza as bases `capifit_db` e `capifit_shadow`, garante o usuário informado e grava `apps/api/.env` a partir do template `apps/api/.env.example`.
-- Prefere um fluxo manual? Utilize `apps/api/prisma/bootstrap.sql` e edite `apps/api/.env.example` conforme necessário antes de copiá-lo.
+### 4.1 Configuração manual do `.env` da API
+- Copie `apps/api/.env.example` para `apps/api/.env`.
+- Preencha manualmente as variáveis essenciais (veja lista abaixo).
+- Caso precise criar banco/usuário, use `apps/api/prisma/bootstrap.sql` como referência (executando os comandos manualmente no Postgres).
 
 Para o frontend, copie e ajuste o template:
 ```bash
