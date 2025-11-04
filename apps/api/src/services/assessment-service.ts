@@ -251,9 +251,9 @@ export async function listAssessmentClients(params: {
     }),
   ]);
 
-  const latestCompletedMap = new Map<string, Prisma.AssessmentGetPayload<{}>>();
-  const nextScheduledMap = new Map<string, Prisma.AssessmentGetPayload<{}>>();
-  const measurementMap = new Map<string, Prisma.MeasurementRecordGetPayload<{}>>();
+  const latestCompletedMap = new Map<string, Prisma.Assessment>();
+  const nextScheduledMap = new Map<string, Prisma.Assessment>();
+  const measurementMap = new Map<string, Prisma.MeasurementRecord>();
 
   for (const assessment of completedAssessments) {
     if (!latestCompletedMap.has(assessment.clientId)) {

@@ -72,6 +72,7 @@ const createFoodSchema = z.object({
 
 type CreateFoodPayload = z.infer<typeof createFoodSchema>;
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 type _CreateFoodSchemaCheck = CreateFoodPayload extends CreateFoodData
   ? CreateFoodData extends CreateFoodPayload
     ? true
@@ -145,6 +146,7 @@ const nutritionPlanSchema = z.object({
 
 type NutritionPlanFormPayload = z.infer<typeof nutritionPlanSchema>;
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 type _NutritionPlanSchemaCheck = NutritionPlanFormPayload extends NutritionPlanPayload
   ? NutritionPlanPayload extends NutritionPlanFormPayload
     ? true

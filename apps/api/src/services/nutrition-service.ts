@@ -118,7 +118,7 @@ function resolveTrainerScope(user: AuthenticatedUser | undefined, trainerId?: st
   return undefined;
 }
 
-function buildFoodResponse(food: Prisma.FoodGetPayload<{}>) {
+function buildFoodResponse(food: Prisma.Food) {
   return {
     id: food.id,
     name: food.name,

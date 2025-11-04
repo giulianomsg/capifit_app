@@ -68,12 +68,14 @@ const updateUserSchema = baseUserSchema
 type CreateUserPayload = z.infer<typeof createUserSchema>;
 type UpdateUserPayload = z.infer<typeof updateUserSchema>;
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 type _CreateUserSchemaCheck = CreateUserPayload extends CreateUserData
   ? CreateUserData extends CreateUserPayload
     ? true
     : never
   : never;
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 type _UpdateUserSchemaCheck = UpdateUserPayload extends UpdateUserData
   ? UpdateUserData extends UpdateUserPayload
     ? true

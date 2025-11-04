@@ -787,10 +787,6 @@ function startOfWeek(date: Date) {
   return resultDate;
 }
 
-function formatDate(date: Date) {
-  return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-}
-
 function normalizeChartEntries<T extends { name: string; value: number }>(entries: T[], fallbackLabel: string): T[] {
   if (!entries || entries.length === 0) {
     return [

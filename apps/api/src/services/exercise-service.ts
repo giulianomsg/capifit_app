@@ -221,15 +221,12 @@ export async function createExercise(user: AuthenticatedUser, payload: unknown) 
   const data = result.data;
   const baseSlug = toSlug(data.name);
   let slug = baseSlug;
-  let counter = 1;
+  let counter = 0;
 
-  while (true) {
-    const existing = await prisma.exercise.findUnique({ where: { slug } });
-    if (!existing) {
-      break;
-    }
-    slug = `${baseSlug}-${counter}`;
+  // Ensure slug uniqueness by checking sequential suffixes until a free one is found.
+  while (await prisma.exercise.findUnique({ where: { slug } })) {
     counter += 1;
+    slug = `${baseSlug}-${counter}`;
   }
 
   const exercise = await prisma.exercise.create({
