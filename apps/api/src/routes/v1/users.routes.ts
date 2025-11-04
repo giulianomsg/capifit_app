@@ -14,6 +14,8 @@ import {
   removeUserAccount,
   updateUserAccount,
   updateUserAvatar,
+  type CreateUserData,
+  type UpdateUserData,
 } from '@services/user-service';
 
 const userStatusValues = new Set(Object.values(UserStatus));
@@ -63,6 +65,24 @@ const updateUserSchema = baseUserSchema
   })
   .refine((payload) => Object.keys(payload).length > 0, { message: 'No fields provided' });
 
+type CreateUserPayload = z.infer<typeof createUserSchema>;
+type UpdateUserPayload = z.infer<typeof updateUserSchema>;
+
+type _CreateUserSchemaCheck = CreateUserPayload extends CreateUserData
+  ? CreateUserData extends CreateUserPayload
+    ? true
+    : never
+  : never;
+
+type _UpdateUserSchemaCheck = UpdateUserPayload extends UpdateUserData
+  ? UpdateUserData extends UpdateUserPayload
+    ? true
+    : never
+  : never;
+
+const toCreateUserData = (payload: CreateUserPayload): CreateUserData => payload as CreateUserData;
+const toUpdateUserData = (payload: UpdateUserPayload): UpdateUserData => payload as UpdateUserData;
+
 export const usersRouter = Router();
 
 usersRouter.use(requireAuth);
@@ -96,7 +116,7 @@ usersRouter.get('/', requireRoles('admin'), async (req, res, next) => {
 
 usersRouter.post('/', requireRoles('admin'), async (req, res, next) => {
   try {
-    const payload = createUserSchema.parse(req.body);
+    const payload = toCreateUserData(createUserSchema.parse(req.body));
     const user = await createUserAccount({ user: req.user, data: payload });
     res.status(201).json({ user });
   } catch (error) {
@@ -123,7 +143,7 @@ usersRouter.patch('/:userId', async (req, res, next) => {
     if (!userId) {
       throw createHttpError(400, 'User id is required');
     }
-    const payload = updateUserSchema.parse(req.body);
+    const payload = toUpdateUserData(updateUserSchema.parse(req.body));
     const user = await updateUserAccount({ user: req.user, userId, data: payload });
     res.json({ user });
   } catch (error) {

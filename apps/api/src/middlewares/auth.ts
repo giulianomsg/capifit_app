@@ -3,7 +3,9 @@ import createHttpError from 'http-errors';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 
-import type { UserStatus } from '@prisma/client';
+import type { User } from '@prisma/client';
+
+type UserStatus = User['status'];
 
 import { env } from '@config/env';
 import { prisma } from '@lib/prisma';

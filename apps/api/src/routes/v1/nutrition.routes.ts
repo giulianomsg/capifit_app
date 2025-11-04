@@ -13,6 +13,8 @@ import {
   listNutritionAttachments,
   listNutritionPlans,
   saveNutritionAttachment,
+  type CreateFoodData,
+  type NutritionPlanPayload,
 } from '@services/nutrition-service';
 
 const router = Router();
@@ -68,9 +70,19 @@ const createFoodSchema = z.object({
   sodium: z.coerce.number().min(0).optional(),
 });
 
+type CreateFoodPayload = z.infer<typeof createFoodSchema>;
+
+type _CreateFoodSchemaCheck = CreateFoodPayload extends CreateFoodData
+  ? CreateFoodData extends CreateFoodPayload
+    ? true
+    : never
+  : never;
+
+const toCreateFoodData = (payload: CreateFoodPayload): CreateFoodData => payload as CreateFoodData;
+
 router.post('/foods', requireRoles('admin', 'trainer'), async (req, res, next) => {
   try {
-    const body = createFoodSchema.parse(req.body);
+    const body = toCreateFoodData(createFoodSchema.parse(req.body));
     const food = await createFood({ user: req.user, data: body });
     res.status(201).json({ food });
   } catch (error) {
@@ -131,9 +143,20 @@ const nutritionPlanSchema = z.object({
     .min(1),
 });
 
+type NutritionPlanFormPayload = z.infer<typeof nutritionPlanSchema>;
+
+type _NutritionPlanSchemaCheck = NutritionPlanFormPayload extends NutritionPlanPayload
+  ? NutritionPlanPayload extends NutritionPlanFormPayload
+    ? true
+    : never
+  : never;
+
+const toNutritionPlanPayload = (payload: NutritionPlanFormPayload): NutritionPlanPayload =>
+  payload as NutritionPlanPayload;
+
 router.post('/plans', requireRoles('admin', 'trainer'), async (req, res, next) => {
   try {
-    const body = nutritionPlanSchema.parse(req.body);
+    const body = toNutritionPlanPayload(nutritionPlanSchema.parse(req.body));
     const plan = await createNutritionPlan({ user: req.user, data: body });
     res.status(201).json({ plan });
   } catch (error) {

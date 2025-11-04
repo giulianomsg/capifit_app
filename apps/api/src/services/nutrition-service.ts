@@ -19,7 +19,7 @@ interface AuthenticatedUser {
   roles: string[];
 }
 
-interface NutritionPlanPayload {
+export interface NutritionPlanPayload {
   clientId: string;
   title: string;
   description?: string | null;
@@ -206,6 +206,19 @@ function buildPlanSummary(plan: Prisma.NutritionPlanGetPayload<{
   };
 }
 
+export interface CreateFoodData {
+  name: string;
+  category: string;
+  servingSize?: number;
+  calories: number;
+  protein?: number;
+  carbs?: number;
+  fat?: number;
+  fiber?: number;
+  sugar?: number;
+  sodium?: number;
+}
+
 export async function listFoods(params: {
   user: AuthenticatedUser | undefined;
   search?: string;
@@ -231,18 +244,7 @@ export async function listFoods(params: {
 
 export async function createFood(params: {
   user: AuthenticatedUser | undefined;
-  data: {
-    name: string;
-    category: string;
-    servingSize?: number;
-    calories: number;
-    protein?: number;
-    carbs?: number;
-    fat?: number;
-    fiber?: number;
-    sugar?: number;
-    sodium?: number;
-  };
+  data: CreateFoodData;
 }) {
   ensureTrainerOrAdmin(params.user);
 

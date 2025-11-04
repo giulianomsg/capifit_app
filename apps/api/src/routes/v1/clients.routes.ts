@@ -81,8 +81,8 @@ type _UpdateClientSchemaCheck = UpdateClientPayload extends UpdateClientData
     : never
   : never;
 
-const toCreateClientData = (payload: CreateClientPayload): CreateClientData => payload;
-const toUpdateClientData = (payload: UpdateClientPayload): UpdateClientData => payload;
+const toCreateClientData = (payload: CreateClientPayload): CreateClientData => payload as CreateClientData;
+const toUpdateClientData = (payload: UpdateClientPayload): UpdateClientData => payload as UpdateClientData;
 
 function parseEnumList<T extends string>(value: unknown, allowed: readonly T[]) {
   if (value === undefined) {

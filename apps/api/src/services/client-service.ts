@@ -55,31 +55,32 @@ export interface CreateClientInput {
   };
 }
 
+export type CreateClientData = CreateClientInput['data'];
+
+export type UpdateClientData = {
+  name?: string;
+  email?: string;
+  phone?: string;
+  subscriptionPlan?: SubscriptionPlan;
+  paymentStatus?: PaymentStatus;
+  activityLevel?: ActivityLevel;
+  progressPercentage?: number;
+  goals?: string[];
+  experienceLevel?: string;
+  gender?: string;
+  notes?: string;
+  medicalConditions?: string;
+  dateOfBirth?: Date;
+  nextAssessmentAt?: Date;
+  lastWorkoutAt?: Date;
+  status?: TrainerClientStatus;
+};
+
 interface UpdateClientInput {
   user: AuthenticatedUser;
   assignmentId: string;
-  data: {
-    name?: string;
-    email?: string;
-    phone?: string;
-    subscriptionPlan?: SubscriptionPlan;
-    paymentStatus?: PaymentStatus;
-    activityLevel?: ActivityLevel;
-    progressPercentage?: number;
-    goals?: string[];
-    experienceLevel?: string;
-    gender?: string;
-    notes?: string;
-    medicalConditions?: string;
-    dateOfBirth?: Date;
-    nextAssessmentAt?: Date;
-    lastWorkoutAt?: Date;
-    status?: TrainerClientStatus;
-  };
+  data: UpdateClientData;
 }
-
-export type CreateClientData = CreateClientInput['data'];
-export type UpdateClientData = UpdateClientInput['data'];
 
 interface RemoveClientInput {
   user: AuthenticatedUser;
