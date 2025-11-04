@@ -96,6 +96,7 @@ Em `apps/web/.env` ajuste:
 - `VITE_WS_PATH=/socket.io`
 - A API publica eventos Socket.IO `workout:created|updated|deleted|session-logged` e `nutrition:plan-created|plan-updated`; mantenha `VITE_WS_URL` acessível para que o frontend invalide caches automaticamente.
 - Opcional: `VITE_GOOGLE_ANALYTICS_ID`, `VITE_SENTRY_DSN`
+- Se precisar liberar hosts adicionais no modo preview (`npm run preview`), defina `VITE_PREVIEW_ALLOWED_HOSTS=dominio1,dominio2`.
 
 Salve os arquivos `.env` em local seguro (backup + controle de acesso).
 
@@ -158,18 +159,116 @@ O serviço `web` já entrega a aplicação através de um Nginx interno, expondo
    pm2 save
    pm2 startup systemd
    ```
-6. **Logs**:
-   ```bash
-   pm2 logs capifit-api
-   pm2 logs capifit-web
-   ```
-
-> A API depende de PostgreSQL e Redis externos. Configure serviços gerenciados (RDS, Elasticache) ou instale-os no mesmo host.
 
 ---
-## 7. Banco de dados e Redis gerenciados manualmente
+## 7. Configurando o Nginx para `capifit.app.br`
 
-### 7.1 PostgreSQL local
+> ✅ Requisitos: DNS dos domínios `capifit.app.br` e `www.capifit.app.br` apontando para o IP público do servidor, portas 80 e 443 liberadas e o build recente da aplicação (`npm run build`).
+
+### 7.1 Instalar Nginx e Certbot
+
+```bash
+sudo apt update
+sudo apt install -y nginx python3-certbot-nginx
+```
+
+Após a instalação, o Nginx já cria um serviço systemd ativo (`sudo systemctl status nginx`).
+
+### 7.2 Criar o servidor virtual
+
+Crie o arquivo `/etc/nginx/sites-available/capifit_app` com o conteúdo abaixo, ajustando caminhos se você implantou o projeto em outra pasta. O bloco trata HTTP → HTTPS, entrega o frontend buildado e atua como proxy reverso para a API.
+
+```nginx
+server {
+  listen 80;
+  listen [::]:80;
+  server_name capifit.app.br www.capifit.app.br;
+
+  # redireciona tudo em HTTP para HTTPS
+  return 301 https://capifit.app.br$request_uri;
+}
+
+server {
+  listen 443 ssl http2;
+  listen [::]:443 ssl http2;
+  server_name capifit.app.br www.capifit.app.br;
+
+  # certificados serão preenchidos pelo Certbot na etapa seguinte
+  ssl_certificate     /etc/letsencrypt/live/capifit.app.br/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/capifit.app.br/privkey.pem;
+  include /etc/letsencrypt/options-ssl-nginx.conf;
+  ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+  # Frontend estático
+  root /var/www/capifit_app/apps/web/build;
+  index index.html;
+
+  # Garante roteamento SPA
+  location / {
+    try_files $uri $uri/ /index.html;
+  }
+
+  # Proxy da API para o processo PM2 (porta 3001)
+  location /api/ {
+    proxy_pass http://127.0.0.1:3001/;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
+  # Proxy do Socket.IO exposto pela API
+  location /socket.io/ {
+    proxy_pass http://127.0.0.1:3001/socket.io/;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+}
+```
+
+Habilite o site e teste a sintaxe:
+
+```bash
+sudo ln -s /etc/nginx/sites-available/capifit_app /etc/nginx/sites-enabled/capifit_app
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+### 7.3 Emitir certificados TLS com Let's Encrypt
+
+```bash
+sudo certbot --nginx -d capifit.app.br -d www.capifit.app.br
+```
+
+O Certbot ajustará o bloco HTTPS e instalará timers para renovação automática (`systemctl list-timers | grep certbot`). Valide o acesso em `https://capifit.app.br` e `https://www.capifit.app.br`.
+
+### 7.4 Ajustes de headers opcionais
+
+Para reforço adicional, considere habilitar headers de segurança e caching básico para ativos estáticos no bloco HTTPS:
+
+```nginx
+  add_header X-Frame-Options "SAMEORIGIN" always;
+  add_header X-Content-Type-Options "nosniff" always;
+  add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+  location ~* \.(js|css|png|jpg|jpeg|gif|svg|ico)$ {
+    expires 30d;
+    access_log off;
+  }
+```
+
+---
+## 8. Banco de dados e Redis gerenciados manualmente
+
+### 8.1 PostgreSQL local
 ```bash
 sudo apt install -y postgresql postgresql-contrib
 npm run db:bootstrap --workspace apps/api
@@ -182,7 +281,7 @@ sudo -u postgres psql -f apps/api/prisma/bootstrap.sql
 ```
 Ajuste `postgresql.conf` e `pg_hba.conf` para garantir autenticação segura (ex.: `scram-sha-256`) e acesso remoto conforme a política da sua infraestrutura.
 
-### 7.2 Redis
+### 8.2 Redis
 ```bash
 sudo apt install -y redis-server
 sudo sed -i "s/^supervised no/supervised systemd/" /etc/redis/redis.conf
@@ -192,59 +291,31 @@ sudo systemctl enable --now redis-server
 Atualize `REDIS_URL=redis://127.0.0.1:6379` nos `.env` se usar o serviço local.
 
 ---
-## 8. Configuração do Nginx (host)
+## 9. Manutenção contínua
 
-Crie `/etc/nginx/sites-available/capifit.conf`:
-```nginx
-server {
-    listen 80;
-    server_name app.seudominio.com;
+1. **Logs**:
+   ```bash
+   pm2 logs capifit-api
+   pm2 logs capifit-web
+   ```
 
-    location /.well-known/acme-challenge/ {
-        root /var/www/html;
-    }
+2. **Atualizações**:
+   ```bash
+   git pull origin main
+   npm install
+   npm run build
+   pm2 reload ecosystem.config.cjs
+   ```
 
-    location /api/ {
-        proxy_pass http://127.0.0.1:3001/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
+3. **Renovação de certificados**: o Certbot cria um timer systemd (`certbot.timer`). Verifique os logs esporadicamente:
+   ```bash
+   sudo journalctl -u certbot --since "7 days ago"
+   ```
 
-    location /socket.io/ {
-        proxy_pass http://127.0.0.1:3001/socket.io/;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "Upgrade";
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-
-    location / {
-        proxy_pass http://127.0.0.1:4173/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-}
-```
-
-Ative a configuração e reinicie:
-```bash
-sudo ln -s /etc/nginx/sites-available/capifit.conf /etc/nginx/sites-enabled/capifit.conf
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-Use **Certbot** para TLS:
-```bash
-sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d app.seudominio.com
-```
+> A API depende de PostgreSQL e Redis externos. Configure serviços gerenciados (RDS, Elasticache) ou instale-os no mesmo host.
 
 ---
-## 9. Checklist pós-implantação
+## 10. Checklist pós-implantação
 
 1. Acesse `https://app.seudominio.com/health` e confirme `{ "status": "ok" }`.
 2. Faça login com o usuário administrador seed `admin@capifit.com` (senha definida em `ADMIN_DEFAULT_PASSWORD`).
@@ -254,7 +325,7 @@ sudo certbot --nginx -d app.seudominio.com
 6. Monitore logs: `docker compose logs` ou `pm2 logs`.
 
 ---
-## 10. Atualizações seguras
+## 11. Atualizações seguras
 
 1. Faça backup do banco (`pg_dump`) e dos uploads (`apps/api/storage` ou volume `api_storage`).
 2. Aplique `git pull` + `npm install` (ou `docker compose pull`).
@@ -263,7 +334,7 @@ sudo certbot --nginx -d app.seudominio.com
 5. Valide `/health`, notificações e fila de e-mails.
 
 ---
-## 11. Segurança e observabilidade
+## 12. Segurança e observabilidade
 
 - **Autenticação JWT**: tokens de acesso (15 min) + refresh (14 dias) com revogação server-side.
 - **Logs estruturados**: Pino registra JSON no stdout (PM2/Docker capturam automaticamente).
