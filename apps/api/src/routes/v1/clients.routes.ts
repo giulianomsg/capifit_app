@@ -143,7 +143,25 @@ router.post('/', async (req, res, next) => {
       throw createHttpError(401, 'Authentication required');
     }
 
-    const payload = toCreateClientData(createClientSchema.parse(req.body));
+    const parsed = toCreateClientData(createClientSchema.parse(req.body));
+    const payload: CreateClientData = {
+      name: parsed.name,
+      email: parsed.email,
+      subscriptionPlan: parsed.subscriptionPlan,
+      paymentStatus: parsed.paymentStatus,
+      activityLevel: parsed.activityLevel,
+      ...(parsed.phone !== undefined ? { phone: parsed.phone } : {}),
+      ...(parsed.progressPercentage !== undefined ? { progressPercentage: parsed.progressPercentage } : {}),
+      ...(parsed.goals !== undefined ? { goals: parsed.goals } : {}),
+      ...(parsed.experienceLevel !== undefined ? { experienceLevel: parsed.experienceLevel } : {}),
+      ...(parsed.gender !== undefined ? { gender: parsed.gender } : {}),
+      ...(parsed.notes !== undefined ? { notes: parsed.notes } : {}),
+      ...(parsed.medicalConditions !== undefined ? { medicalConditions: parsed.medicalConditions } : {}),
+      ...(parsed.dateOfBirth !== undefined ? { dateOfBirth: parsed.dateOfBirth } : {}),
+      ...(parsed.nextAssessmentAt !== undefined ? { nextAssessmentAt: parsed.nextAssessmentAt } : {}),
+      ...(parsed.lastWorkoutAt !== undefined ? { lastWorkoutAt: parsed.lastWorkoutAt } : {}),
+      ...(parsed.sendInvitation !== undefined ? { sendInvitation: parsed.sendInvitation } : {}),
+    };
 
     const trainerId = typeof req.query.trainerId === 'string' ? optionalId.parse(req.query.trainerId) : undefined;
 
@@ -169,7 +187,8 @@ router.patch('/:assignmentId', async (req, res, next) => {
     }
 
     const assignmentId = optionalId.parse(req.params.assignmentId);
-    const payload = toUpdateClientData(updateClientSchema.parse(req.body));
+    const parsed = toUpdateClientData(updateClientSchema.parse(req.body));
+    const payload: UpdateClientData = { ...parsed };
 
     const assignment = await updateClientAssignment({
       user: req.user,
