@@ -54,6 +54,11 @@ cd /opt
 sudo git clone https://github.com/giulianomsg/capifit_app.git
 sudo chown -R $USER:$USER capifit_app
 cd capifit_app
+
+# Instale as dependências do monorepo **antes** de executar qualquer script
+npm install
+# Gere os tipos Prisma consumidos pela API
+npm run generate --workspace apps/api
 ```
 
 O repositório já vem organizado como monorepo npm com workspaces.
