@@ -1,4 +1,4 @@
-import 'tsconfig-paths/register';
+import 'tsconfig-paths/register.js';
 import { createServer } from 'node:http';
 
 import { env } from '@config/env';
