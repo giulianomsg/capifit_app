@@ -8,7 +8,13 @@ import { connectionString, memDatabase } from './pg-mem';
 
 const SALT_ROUNDS = Number(process.env.PASSWORD_SALT_ROUNDS ?? '10');
 
+let migrationsApplied = false;
+
 export async function applyMigrations() {
+  if (migrationsApplied) {
+    return;
+  }
+
   const migrationsDir = path.resolve(__dirname, '../../prisma/migrations');
   const entries = await fs.readdir(migrationsDir, { withFileTypes: true });
   const directories = entries
@@ -27,6 +33,8 @@ export async function applyMigrations() {
     }
     memDatabase.public.none(sanitized);
   }
+
+  migrationsApplied = true;
 }
 
 export async function clearDatabase(prisma: PrismaClient) {
