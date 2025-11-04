@@ -36,66 +36,71 @@ CapiFit is a full-stack platform that empowers personal trainers to manage clien
 | Deployment | Docker Compose, PM2, Nginx, npm workspaces |
 | Testing    | Vitest, Supertest |
 
-## ✅ Prerequisites
+## ✅ Prerequisitos
 
-- Node.js 20+
-- npm 10+
-- Docker & Docker Compose (optional, for containerized setup)
-- PostgreSQL 14+ (if not using Docker)
+- **Node.js 20.x** (verifique com `node -v`)
+- **npm 10.x** (`npm -v`)
+- **PostgreSQL 14+** e **Redis 6+** instalados localmente ou acessíveis remotamente
+- **Docker & Docker Compose** apenas se optar por subir tudo em containers
 
-## 🚀 Quick Start (local development)
+> 💡 Se você já tentou instalar o projeto antes, execute o passo de “limpeza” abaixo antes de continuar para evitar conflitos de cache ou dependências quebradas.
 
-1. **Clone e prepare o diretório de trabalho**
+## 🚀 Instalação detalhada (ambiente local)
+
+1. **Clone o repositório e acesse a pasta do monorepo**
    ```bash
    git clone https://github.com/giulianomsg/capifit_app.git
    cd capifit_app
    ```
 
-2. **Limpe instalações anteriores (recomendado quando atualizando a stack)**
+2. **(Opcional, mas recomendado) Limpe instalações anteriores**
    ```bash
-   rm -rf node_modules apps/api/node_modules apps/web/node_modules package-lock.json apps/api/package-lock.json apps/web/package-lock.json
+   rm -rf node_modules apps/api/node_modules apps/web/node_modules \
+          package-lock.json apps/api/package-lock.json apps/web/package-lock.json
    npm cache clean --force
    ```
 
-3. **Instale as dependências usando os workspaces**
+3. **Instale as dependências compartilhadas e dos workspaces**
    ```bash
    npm install
    ```
-   - O `package.json` raiz define `overrides` que fixam `express@5.1.0`, `eslint@8.57.0` e padronizam `rate-limiter-flexible@8.1.0`, evitando conflitos com versões antigas ou inexistentes.
-   - Se o ambiente corporativo bloquear pacotes (ex.: `@prisma/client`), configure um espelho autorizado ou libere o acesso ao registry oficial (`https://registry.npmjs.org`).
+   - O `package.json` raiz contém a seção `overrides` que fixa versões críticas (`express@5.1.0`, `eslint@8.57.0`, `rate-limiter-flexible@8.1.0`, etc.), garantindo que `npm install` produza o mesmo lockfile em todos os ambientes.
+   - Trabalhando atrás de um proxy corporativo? Adicione `npm config set proxy http://seu-proxy:3128` (e `https-proxy`) ou libere o acesso ao registry padrão (`https://registry.npmjs.org`).
 
-4. **Configure as variáveis de ambiente de desenvolvimento**
+4. **Configure variáveis de ambiente**
    ```bash
    cp apps/web/.env.example apps/web/.env
    npm run db:bootstrap --workspace apps/api
    ```
-   - O comando `db:bootstrap` copia `apps/api/.env.example` para `apps/api/.env`, solicita interativamente as credenciais do PostgreSQL e provisiona o usuário/banco exigidos usando `psql`.
-   - As senhas digitadas não são persistidas no repositório (o `.env` permanece ignorado) e o script é idempotente.
-   - Caso o servidor PostgreSQL use autenticação por peer, deixe o campo de senha do superusuário em branco ou ajuste o `pg_hba.conf`.
-   - Prefere fazer manualmente? Consulte `apps/api/prisma/bootstrap.sql` para os comandos SQL correspondentes.
+   - O script `db:bootstrap` copia `apps/api/.env.example` para `apps/api/.env`, coleta host, porta, usuário e senha do PostgreSQL e cria automaticamente os bancos `capifit_db` e `capifit_shadow`.
+   - Se preferir preencher manualmente, copie o arquivo e edite os campos listados em `apps/api/.env.example`. Use `apps/api/prisma/bootstrap.sql` como referência para criar os bancos/usuários via `psql`.
+   - Gere também um arquivo `.env` para o frontend (`apps/web/.env`) apontando para o host da API (`VITE_API_URL`) e para o socket (`VITE_WS_URL`).
 
-5. **Gere o client Prisma, rode migrações e seeds**
+5. **Gere artefatos Prisma e aplique migrações/sementes**
    ```bash
    npm run generate --workspace apps/api
    npm run migrate --workspace apps/api
    npm run seed --workspace apps/api
    ```
+   Esses comandos preparam o cliente Prisma, sincronizam o schema com o banco local e carregam usuários de teste, planos, notificações e demais dados iniciais.
 
-6. **Execute checagens de lint e testes opcionais**
+6. **Valide a instalação executando lint, testes e builds**
    ```bash
    npm run lint
    npm run test
+   npm run build --workspace apps/api
+   npm run build --workspace apps/web
    ```
-   Esses comandos utilizam `eslint@8` e Vitest. Caso esteja em ambiente restrito, certifique-se de instalar as dependências antes de rodá-los.
+   - O build raiz (`npm run build`) encadeia os dois workspaces. Utilize os comandos individuais se quiser diagnosticar problemas isoladamente.
+   - Ambientes sem acesso ao npm registry podem falhar ao resolver dependências do frontend (ex.: `recharts`). Neste caso, configure um espelho interno ou baixe as dependências manualmente.
 
-7. **Inicie os serviços em modo desenvolvimento**
+7. **Suba o ambiente de desenvolvimento**
    ```bash
    npm run dev
    ```
-   - API disponível em `http://localhost:3001` (verifique `/health`).
-   - Web disponível em `http://localhost:5173`.
-
-   Use os atalhos `npm run dev:api` ou `npm run dev:web` para executar apenas um workspace.
+   - API disponível em `http://localhost:3001` (endpoint de saúde: `/health`).
+   - Frontend em `http://localhost:5173`.
+   - Use `npm run dev:api` ou `npm run dev:web` para executar apenas um dos serviços.
 
 ## 🧪 Testing & Linting
 
