@@ -80,6 +80,7 @@ cp apps/web/.env.example apps/web/.env
 Revise `apps/api/.env` gerado para confirmar:
 - `PORT=3001`
 - `API_BASE_URL=https://app.seudominio.com/api`
+- `API_BASE_PATHS=/api,/` (lista separada por vírgula; inclui fallback sem prefixo para compatibilidade com proxies)
 - `FRONTEND_URL=https://app.seudominio.com`
 - `DATABASE_URL=postgresql://usuario:senha@host:5432/capifit`
 - `SHADOW_DATABASE_URL` (para migrações Prisma)

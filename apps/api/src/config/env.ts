@@ -1,3 +1,29 @@
+const normalizeBasePath = (segment: string) => {
+  if (!segment) {
+    return null;
+  }
+
+  const trimmed = segment.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (trimmed === '/') {
+    return '/';
+  }
+
+  const normalized = trimmed.replace(/^\/+/, '').replace(/\/+$/, '');
+  return normalized ? `/${normalized}` : '/';
+};
+
+const basePathsFromEnv = process.env.API_BASE_PATHS
+  ? process.env.API_BASE_PATHS.split(',').map((segment) => normalizeBasePath(segment)).filter((segment): segment is string => Boolean(segment))
+  : [];
+
+const defaultBasePaths = ['/api', '/'];
+
+const apiBasePaths = Array.from(new Set([...basePathsFromEnv, ...defaultBasePaths]));
+
 export const env = {
   NODE_ENV: process.env.NODE_ENV ?? 'development',
   PORT: Number(process.env.PORT ?? 3001),
@@ -30,4 +56,5 @@ export const env = {
   LOG_LEVEL: process.env.LOG_LEVEL ?? 'info',
   RATE_LIMIT_WINDOW_MS: Number(process.env.RATE_LIMIT_WINDOW_MS ?? 15 * 60 * 1000),
   RATE_LIMIT_MAX: Number(process.env.RATE_LIMIT_MAX ?? 100),
+  API_BASE_PATHS: apiBasePaths,
 };

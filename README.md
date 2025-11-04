@@ -204,6 +204,7 @@ Initial migration `202501010001_init` builds the schema and triggers. Seeding (`
 |----------|-------------|
 | `PORT` | API port (default 3001) |
 | `API_BASE_URL` | Public base URL of the API |
+| `API_BASE_PATHS` | Lista de prefixos aceitos para os endpoints (ex.: `/api,/`) |
 | `FRONTEND_URL` | Allowed CORS origin |
 | `DATABASE_URL` | PostgreSQL connection string |
 | `SHADOW_DATABASE_URL` | Shadow DB for Prisma migrations |
