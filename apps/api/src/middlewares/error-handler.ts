@@ -13,12 +13,17 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     ? normalizedError
     : createHttpError(500, 'Erro interno do servidor', { expose: false });
 
+  const statusFromError =
+    typeof err === 'object' && err !== null && 'statusCode' in err
+      ? (err as { statusCode?: unknown }).statusCode
+      : undefined;
+
   const status =
-    httpError.status ||
-    (typeof err === 'object' && err !== null && 'statusCode' in err && typeof (err as any).statusCode === 'number'
-      ? (err as any).statusCode
-      : undefined) ||
-    500;
+    typeof httpError.status === 'number'
+      ? httpError.status
+      : typeof statusFromError === 'number'
+        ? statusFromError
+        : 500;
 
   const message = (httpError.message ?? 'Erro interno do servidor').trim() || 'Erro interno do servidor';
 

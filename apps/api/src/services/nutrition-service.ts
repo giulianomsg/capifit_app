@@ -1,3 +1,4 @@
+import type { Express } from 'express';
 import { randomUUID } from 'node:crypto';
 
 import createHttpError from 'http-errors';
@@ -27,18 +28,18 @@ export interface NutritionPlanPayload {
   macros?: { protein?: number; carbs?: number; fat?: number } | null;
   startDate?: Date | string | null;
   endDate?: Date | string | null;
-  meals: Array<{
+  meals: {
     name: string;
     scheduledAt?: string | Date | null;
     notes?: string | null;
-    items: Array<{
+    items: {
       foodId?: string | null;
       customName?: string | null;
       quantity?: number | null;
       unit?: string | null;
       macros?: { calories?: number; protein?: number; carbs?: number; fat?: number } | null;
-    }>;
-  }>;
+    }[];
+  }[];
 }
 
 function isAdmin(user: AuthenticatedUser | undefined) {
@@ -78,7 +79,7 @@ async function ensureClientAssignment(user: AuthenticatedUser | undefined, clien
 function emitNutritionEvent(
   event: 'plan-created' | 'plan-updated',
   payload: unknown,
-  recipients: Array<string | null | undefined>,
+  recipients: (string | null | undefined)[],
 ) {
   const uniqueRecipients = new Set<string>();
   for (const recipient of recipients) {

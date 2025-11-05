@@ -209,7 +209,7 @@ function serializeWorkout(workout: WorkoutPayload) {
 function emitWorkoutEvent(
   event: 'created' | 'updated' | 'deleted' | 'session-logged',
   payload: unknown,
-  recipients: Array<string | null | undefined>,
+  recipients: (string | null | undefined)[],
 ) {
   const uniqueRecipients = new Set<string>();
   for (const recipient of recipients) {

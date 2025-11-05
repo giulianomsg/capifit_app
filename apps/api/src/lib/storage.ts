@@ -78,7 +78,12 @@ export const storage = {
     try {
       await fs.unlink(filePath);
     } catch (error: unknown) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      const code =
+        typeof error === 'object' && error !== null && 'code' in error
+          ? (error as { code?: unknown }).code
+          : undefined;
+
+      if (code !== 'ENOENT') {
         throw error;
       }
     }

@@ -1,7 +1,6 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import js from '@eslint/js';
 import tsParser from '@typescript-eslint/parser';
 import tsPlugin from '@typescript-eslint/eslint-plugin';
 import pluginImport from 'eslint-plugin-import';
@@ -19,7 +18,6 @@ export default [
   {
     ignores: ['dist/**', 'node_modules/**'],
   },
-  js.configs.recommended,
   {
     files: ['**/*.ts', '**/*.tsx'],
     languageOptions: {

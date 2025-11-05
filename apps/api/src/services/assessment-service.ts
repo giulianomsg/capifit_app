@@ -1,3 +1,4 @@
+import type { Express } from 'express';
 import { randomUUID } from 'node:crypto';
 
 import createHttpError from 'http-errors';

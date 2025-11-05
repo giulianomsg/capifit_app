@@ -1,3 +1,4 @@
+import type { Express } from 'express';
 import bcrypt from 'bcryptjs';
 import createHttpError from 'http-errors';
 import { Prisma, UserStatus } from '@prisma/client';

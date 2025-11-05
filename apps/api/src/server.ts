@@ -1,5 +1,7 @@
+// eslint-disable-next-line import/extensions
 import 'tsconfig-paths/register.js';
 import { createServer } from 'node:http';
+import type { Signals } from 'node:process';
 
 import { env } from '@config/env';
 import { app } from './app';
@@ -17,7 +19,7 @@ async function bootstrap() {
 
   let shuttingDown = false;
 
-  const shutdown = async (signal: NodeJS.Signals) => {
+  const shutdown = async (signal: Signals) => {
     if (shuttingDown) {
       return;
     }
@@ -52,7 +54,7 @@ async function bootstrap() {
     process.exit(exitCode);
   };
 
-  const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
+  const signals: Signals[] = ['SIGINT', 'SIGTERM'];
   signals.forEach((signal) => {
     process.once(signal, () => {
       void shutdown(signal);
