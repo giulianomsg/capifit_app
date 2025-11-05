@@ -8,6 +8,7 @@ import {
   NutritionPlanStatus,
   Prisma,
   TrainerClientStatus,
+  Food,
 } from '@prisma/client';
 
 import { prisma } from '@lib/prisma';
@@ -119,7 +120,7 @@ function resolveTrainerScope(user: AuthenticatedUser | undefined, trainerId?: st
   return undefined;
 }
 
-function buildFoodResponse(food: Prisma.Food) {
+function buildFoodResponse(food: Food) {
   return {
     id: food.id,
     name: food.name,
@@ -188,9 +189,11 @@ function computePlanCompliance(plan: MealWithItems) {
   return { compliance, totals };
 }
 
-function buildPlanSummary(plan: Prisma.NutritionPlanGetPayload<{
-  include: { client: true; meals: { include: { items: true } } };
-}>) {
+function buildPlanSummary(
+  plan: Prisma.NutritionPlanGetPayload<{
+    include: { client: true; meals: { include: { items: true } } };
+  }>,
+) {
   const { compliance, totals } = computePlanCompliance(plan);
   return {
     id: plan.id,
@@ -395,6 +398,7 @@ export async function getNutritionAnalytics(params: { user: AuthenticatedUser | 
   const weeklyProgress = Array.from({ length: 7 }).map((_, index) => ({
     day: index,
     adherence: Math.max(60, Math.min(100, Math.round(averageCompliance + Math.sin(index) * 5))),
+
   }));
 
   const macroSum = macroTotals.protein + macroTotals.carbs + macroTotals.fat || 1;
@@ -530,14 +534,18 @@ export async function saveNutritionAttachment(params: {
     data: { planId: plan.id, attachmentId: attachment.id },
   });
 
-  emitNutritionEvent('plan-updated', {
-    planId: plan.id,
-    attachment: {
-      id: attachment.id,
-      filename: attachment.filename,
-      uploadedAt: attachment.uploadedAt,
+  emitNutritionEvent(
+    'plan-updated',
+    {
+      planId: plan.id,
+      attachment: {
+        id: attachment.id,
+        filename: attachment.filename,
+        uploadedAt: attachment.uploadedAt,
+      },
     },
-  }, [plan.clientId, plan.trainerId]);
+    [plan.clientId, plan.trainerId],
+  );
 
   return {
     id: attachment.id,
