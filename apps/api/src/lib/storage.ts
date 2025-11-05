@@ -64,6 +64,7 @@ function generateFilename(originalName: string) {
 export const storage = {
   baseDir,
   directories,
+  avatarDir: directories.avatars,
   buildPublicUrl,
   resolveAbsolutePath,
   relativeFromFile,
