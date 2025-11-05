@@ -5,7 +5,10 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    setupFiles: [path.resolve(__dirname, 'test/setup/prisma-test-env.ts')],
+    setupFiles: [
+      path.resolve(__dirname, 'vitest.setup.ts'),
+      path.resolve(__dirname, 'test/setup/prisma-test-env.ts'),
+    ],
     include: ['test/**/*.test.ts'],
   },
   resolve: {

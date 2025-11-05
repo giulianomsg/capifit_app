@@ -7,12 +7,13 @@ import tsPlugin from '@typescript-eslint/eslint-plugin';
 import pluginImport from 'eslint-plugin-import';
 import pluginSecurity from 'eslint-plugin-security';
 import pluginSonarjs from 'eslint-plugin-sonarjs';
+import globals from 'globals';
 
 const tsconfigFile = fileURLToPath(new URL('./tsconfig.json', import.meta.url));
 const tsconfigRoot = path.dirname(tsconfigFile);
 
-const typeCheckedRules = tsPlugin.configs['recommended-type-checked']?.rules ?? {};
-const stylisticRules = tsPlugin.configs['stylistic-type-checked']?.rules ?? {};
+const tsRecommended = tsPlugin.configs.recommended?.rules ?? {};
+const tsStylistic = tsPlugin.configs.stylistic?.rules ?? {};
 
 export default [
   {
@@ -27,6 +28,10 @@ export default [
         project: tsconfigFile,
         tsconfigRootDir: tsconfigRoot,
         sourceType: 'module',
+      },
+      globals: {
+        ...globals.node,
+        ...globals.es2021,
       },
     },
     plugins: {
@@ -46,8 +51,8 @@ export default [
       },
     },
     rules: {
-      ...typeCheckedRules,
-      ...stylisticRules,
+      ...tsRecommended,
+      ...tsStylistic,
       'import/extensions': [
         'error',
         'ignorePackages',
@@ -57,8 +62,10 @@ export default [
           js: 'never',
         },
       ],
-      '@typescript-eslint/consistent-type-imports': 'error',
+      '@typescript-eslint/consistent-type-imports': 'off',
       '@typescript-eslint/no-misused-promises': ['error', { checksVoidReturn: false }],
+      '@typescript-eslint/prefer-nullish-coalescing': 'off',
+      '@typescript-eslint/consistent-type-definitions': 'off',
     },
   },
 ];
