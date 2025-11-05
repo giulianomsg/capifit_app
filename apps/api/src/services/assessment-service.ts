@@ -9,6 +9,8 @@ import {
   NotificationPriority,
   Prisma,
   TrainerClientStatus,
+  Assessment,
+  MeasurementRecord,
 } from '@prisma/client';
 
 import { prisma } from '@lib/prisma';
@@ -93,7 +95,9 @@ function buildAvatarUrl(avatarUrl?: string | null) {
   return storage.buildPublicUrl(avatarUrl);
 }
 
-function serializeMeasurement(record: Prisma.MeasurementRecordGetPayload<{ include: { assessment: true } }>) {
+function serializeMeasurement(
+  record: Prisma.MeasurementRecordGetPayload<{ include: { assessment: true } }>,
+) {
   return {
     id: record.id,
     trainerId: record.trainerId,
@@ -138,51 +142,57 @@ export async function getAssessmentOverview(params: { user: AuthenticatedUser | 
     assessmentWhere.trainerId = trainerScope;
   }
 
-  const [pendingAssessments, pendingToday, completedThisMonth, overdueAssessments, clientAssignments, assessedClients] =
-    await prisma.$transaction([
-      prisma.assessment.count({
-        where: {
-          ...assessmentWhere,
-          status: AssessmentStatus.SCHEDULED,
-        },
-      }),
-      prisma.assessment.count({
-        where: {
-          ...assessmentWhere,
-          status: AssessmentStatus.SCHEDULED,
-          scheduledFor: { gte: startOfDay, lte: endOfDay },
-        },
-      }),
-      prisma.assessment.count({
-        where: {
-          ...assessmentWhere,
-          status: AssessmentStatus.COMPLETED,
-          performedAt: { gte: startOfMonth },
-        },
-      }),
-      prisma.assessment.count({
-        where: {
-          ...assessmentWhere,
-          status: AssessmentStatus.SCHEDULED,
-          scheduledFor: { lt: startOfDay },
-        },
-      }),
-      prisma.trainerClient.count({
-        where: {
-          status: { in: [TrainerClientStatus.ACTIVE, TrainerClientStatus.PAUSED] },
-          ...(trainerScope ? { trainerId: trainerScope } : {}),
-        },
-      }),
-      prisma.assessment.findMany({
-        where: {
-          ...assessmentWhere,
-          status: AssessmentStatus.COMPLETED,
-          performedAt: { gte: new Date(now.getFullYear(), now.getMonth() - 2, now.getDate()) },
-        },
-        distinct: ['clientId'],
-        select: { clientId: true },
-      }),
-    ]);
+  const [
+    pendingAssessments,
+    pendingToday,
+    completedThisMonth,
+    overdueAssessments,
+    clientAssignments,
+    assessedClients,
+  ] = await prisma.$transaction([
+    prisma.assessment.count({
+      where: {
+        ...assessmentWhere,
+        status: AssessmentStatus.SCHEDULED,
+      },
+    }),
+    prisma.assessment.count({
+      where: {
+        ...assessmentWhere,
+        status: AssessmentStatus.SCHEDULED,
+        scheduledFor: { gte: startOfDay, lte: endOfDay },
+      },
+    }),
+    prisma.assessment.count({
+      where: {
+        ...assessmentWhere,
+        status: AssessmentStatus.COMPLETED,
+        performedAt: { gte: startOfMonth },
+      },
+    }),
+    prisma.assessment.count({
+      where: {
+        ...assessmentWhere,
+        status: AssessmentStatus.SCHEDULED,
+        scheduledFor: { lt: startOfDay },
+      },
+    }),
+    prisma.trainerClient.count({
+      where: {
+        status: { in: [TrainerClientStatus.ACTIVE, TrainerClientStatus.PAUSED] },
+        ...(trainerScope ? { trainerId: trainerScope } : {}),
+      },
+    }),
+    prisma.assessment.findMany({
+      where: {
+        ...assessmentWhere,
+        status: AssessmentStatus.COMPLETED,
+        performedAt: { gte: new Date(now.getFullYear(), now.getMonth() - 2, now.getDate()) },
+      },
+      distinct: ['clientId'],
+      select: { clientId: true },
+    }),
+  ]);
 
   return {
     pendingAssessments,
@@ -252,9 +262,9 @@ export async function listAssessmentClients(params: {
     }),
   ]);
 
-  const latestCompletedMap = new Map<string, Prisma.Assessment>();
-  const nextScheduledMap = new Map<string, Prisma.Assessment>();
-  const measurementMap = new Map<string, Prisma.MeasurementRecord>();
+  const latestCompletedMap = new Map<string, Assessment>();
+  const nextScheduledMap = new Map<string, Assessment>();
+  const measurementMap = new Map<string, MeasurementRecord>();
 
   for (const assessment of completedAssessments) {
     if (!latestCompletedMap.has(assessment.clientId)) {
@@ -393,9 +403,7 @@ export async function createAssessment(params: { user: AuthenticatedUser | undef
     userId: params.data.clientId,
     category: NotificationCategory.ASSESSMENT,
     priority: NotificationPriority.NORMAL,
-    title: scheduledFor
-      ? 'Nova avaliação física agendada'
-      : 'Avaliação física registrada',
+    title: scheduledFor ? 'Nova avaliação física agendada' : 'Avaliação física registrada',
     message: scheduledFor
       ? `Sua avaliação está agendada para ${scheduledFor.toLocaleString('pt-BR')}.`
       : 'Uma nova avaliação foi adicionada ao seu histórico.',
@@ -432,9 +440,7 @@ export async function updateAssessment(params: {
   }
   if (params.data.metrics !== undefined) {
     payload.metrics =
-      params.data.metrics === null
-        ? Prisma.JsonNull
-        : (params.data.metrics as Prisma.InputJsonValue);
+      params.data.metrics === null ? Prisma.JsonNull : (params.data.metrics as Prisma.InputJsonValue);
   }
   if (params.data.notes !== undefined) {
     payload.notes = params.data.notes;
@@ -489,11 +495,7 @@ export async function listAssessmentHistory(params: {
       client: true,
       template: true,
     },
-    orderBy: [
-      { performedAt: 'desc' },
-      { scheduledFor: 'desc' },
-      { createdAt: 'desc' },
-    ],
+    orderBy: [{ performedAt: 'desc' }, { scheduledFor: 'desc' }, { createdAt: 'desc' }],
     take: params.limit ?? 50,
   });
 
