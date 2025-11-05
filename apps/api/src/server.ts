@@ -1,7 +1,7 @@
 /* eslint-disable import/extensions */
 import 'tsconfig-paths/register.js';
 import { createServer } from 'node:http';
-import type { Signals } from 'node:process';
+/*import type { Signals } from 'node:process';*/
 
 import { env } from '@config/env';
 import { app } from './app';
@@ -54,7 +54,8 @@ async function bootstrap() {
     process.exit(exitCode);
   };
 
-  const signals: Signals[] = ['SIGINT', 'SIGTERM'];
+  /*const signals: Signals[] = ['SIGINT', 'SIGTERM'];*/
+  const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
   signals.forEach((signal) => {
     process.once(signal, () => {
       void shutdown(signal);
