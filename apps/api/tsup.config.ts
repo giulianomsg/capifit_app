@@ -11,4 +11,5 @@ export default defineConfig({
   target: 'node18',
   tsconfig: 'tsconfig.json',
   shims: false,
+  external: ['tsconfig-paths', 'tsconfig-paths/register', 'tsconfig-paths/register.js'],
 });

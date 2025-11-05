@@ -1,4 +1,4 @@
-import type { Request } from 'express';
+import type { Express, Request } from 'express';
 
 import createHttpError from 'http-errors';
 import multer from 'multer';

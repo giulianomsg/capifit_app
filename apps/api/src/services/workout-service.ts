@@ -209,7 +209,7 @@ function serializeWorkout(workout: WorkoutPayload) {
 function emitWorkoutEvent(
   event: 'created' | 'updated' | 'deleted' | 'session-logged',
   payload: unknown,
-  recipients: Array<string | null | undefined>,
+  recipients: (string | null | undefined)[],
 ) {
   const uniqueRecipients = new Set<string>();
   for (const recipient of recipients) {
@@ -785,10 +785,6 @@ function startOfWeek(date: Date) {
   resultDate.setDate(resultDate.getDate() - diff);
   resultDate.setHours(0, 0, 0, 0);
   return resultDate;
-}
-
-function formatDate(date: Date) {
-  return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 }
 
 function normalizeChartEntries<T extends { name: string; value: number }>(entries: T[], fallbackLabel: string): T[] {

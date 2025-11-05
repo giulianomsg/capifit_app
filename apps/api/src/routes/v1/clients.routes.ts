@@ -69,20 +69,22 @@ const updateClientSchema = createClientSchema
 type CreateClientPayload = z.infer<typeof createClientSchema>;
 type UpdateClientPayload = z.infer<typeof updateClientSchema>;
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 type _CreateClientSchemaCheck = CreateClientPayload extends CreateClientData
   ? CreateClientData extends CreateClientPayload
     ? true
     : never
   : never;
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 type _UpdateClientSchemaCheck = UpdateClientPayload extends UpdateClientData
   ? UpdateClientData extends UpdateClientPayload
     ? true
     : never
   : never;
 
-const toCreateClientData = (payload: CreateClientPayload): CreateClientData => payload;
-const toUpdateClientData = (payload: UpdateClientPayload): UpdateClientData => payload;
+const toCreateClientData = (payload: CreateClientPayload): CreateClientData => payload as CreateClientData;
+const toUpdateClientData = (payload: UpdateClientPayload): UpdateClientData => payload as UpdateClientData;
 
 function parseEnumList<T extends string>(value: unknown, allowed: readonly T[]) {
   if (value === undefined) {

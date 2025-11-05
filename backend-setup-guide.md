@@ -1,415 +1,121 @@
-# 🚀 CapiFit Backend API Setup Guide
+# 🚀 Guia completo de instalação do backend CapiFit (Express + Prisma)
 
-## 📋 Visão Geral
+Este documento descreve o passo a passo para instalar e executar a API localizada em `apps/api`. O objetivo é garantir que, ao final, você consiga rodar `npm run build --workspace apps/api` sem erros, com banco de dados provisionado e variáveis de ambiente configuradas.
 
-Este guia mostra como criar o backend API necessário para funcionar com o banco de dados MySQL/PostgreSQL local.
+---
 
-## 🛠️ Opções de Implementação
+## 1. Pré-requisitos
 
-### Opção 1: Node.js + Express (Recomendado)
+| Ferramenta             | Versão mínima | Comando para verificar |
+|------------------------|---------------|------------------------|
+| Node.js                | 20.x          | `node -v`              |
+| npm                    | 10.x          | `npm -v`               |
+| PostgreSQL             | 14.x          | `psql --version`       |
+| Redis (opcional em dev)| 6.x           | `redis-server --version` |
 
-#### 1. Estrutura do Projeto
-```
-capifit-backend/
-├── package.json
-├── server.js
-├── config/
-│   └── database.js
-├── models/
-│   ├── User.js
-│   ├── Client.js
-│   └── ... (outros modelos)
-├── routes/
-│   ├── auth.js
-│   ├── users.js
-│   ├── clients.js
-│   └── ... (outras rotas)
-├── middleware/
-│   ├── auth.js
-│   └── validation.js
-└── utils/
-    └── helpers.js
-```
+> 💡 Use `curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -` seguido de `sudo apt install -y nodejs` para instalar Node.js + npm no Ubuntu 22.04.
 
-#### 2. Dependências Necessárias
+---
+
+## 2. Preparar o projeto
+
+1. **Clonar o repositório**
+   ```bash
+   git clone https://github.com/giulianomsg/capifit_app.git
+   cd capifit_app
+   ```
+
+2. **Limpeza opcional (se já existirem instalações antigas)**
+   ```bash
+   rm -rf node_modules apps/api/node_modules package-lock.json apps/api/package-lock.json
+   npm cache clean --force
+   ```
+
+3. **Instalar dependências**
+   ```bash
+   npm install
+   ```
+   O `package.json` raiz habilita workspaces; portanto, esse comando instala as dependências compartilhadas e das pastas `apps/api` e `apps/web` em uma única etapa.
+
+---
+
+## 3. Variáveis de ambiente da API
+
+1. **Gerar `.env` automaticamente (recomendado)**
+   ```bash
+   npm run db:bootstrap --workspace apps/api
+   ```
+   Esse script:
+   - Copia `apps/api/.env.example` para `apps/api/.env`.
+   - Solicita host, porta, usuário e senha do PostgreSQL.
+   - Cria os bancos `capifit_db` e `capifit_shadow` usando `psql`.
+
+2. **Configuração manual (alternativa)**
+   - Copie o template: `cp apps/api/.env.example apps/api/.env`.
+   - Atualize os campos obrigatórios:
+     - `DATABASE_URL` e `SHADOW_DATABASE_URL`
+     - `JWT_ACCESS_SECRET` e `JWT_REFRESH_SECRET`
+     - `REDIS_URL` (opcional em desenvolvimento)
+     - `SMTP_*` conforme seu provedor de e-mail
+   - Caso precise criar o banco manualmente, execute `psql -f apps/api/prisma/bootstrap.sql` com um usuário PostgreSQL com permissão.
+
+---
+
+## 4. Preparar banco e cliente Prisma
+
+Dentro da raiz do repositório execute:
+
 ```bash
-npm init -y
-npm install express cors helmet morgan bcryptjs jsonwebtoken
-npm install mysql2 # Para MySQL
-# OU
-npm install pg # Para PostgreSQL
-npm install sequelize # ORM recomendado
-npm install dotenv
+npm run generate --workspace apps/api   # Gera o Prisma Client
+npm run migrate --workspace apps/api    # Aplica migrações em capifit_db
+npm run seed --workspace apps/api       # Insere usuários, planos e dados padrão
 ```
 
-#### 3. Configuração Base (server.js)
-```javascript
-const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
-const morgan = require('morgan');
-require('dotenv').config();
+Se estiver em desenvolvimento local e não quiser Redis, mantenha `REDIS_URL` vazio. A API usa um fallback síncrono para envio de e-mails quando a fila BullMQ não está disponível.
 
-const authRoutes = require('./routes/auth');
-const userRoutes = require('./routes/users');
-const clientRoutes = require('./routes/clients');
-// ... outras rotas
+---
 
-const app = express();
-const PORT = process.env.PORT || 3001;
+## 5. Rodando a API
 
-// Middlewares
-app.use(helmet());
-app.use(cors());
-app.use(morgan('combined'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+### 5.1 Desenvolvimento
 
-// Rotas
-app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/clients', clientRoutes);
-// ... outras rotas
-
-// Error handling middleware
-app.use((error, req, res, next) => {
-  console.error(error);
-  res.status(500).json({ message: 'Internal server error' });
-});
-
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
-```
-
-### Opção 2: PHP + Laravel
-
-#### 1. Instalação
 ```bash
-composer create-project laravel/laravel capifit-api
-cd capifit-api
+npm run dev --workspace apps/api
 ```
 
-#### 2. Configuração do Banco (.env)
-```env
-DB_CONNECTION=mysql  # ou pgsql para PostgreSQL
-DB_HOST=127.0.0.1
-DB_PORT=3306        # ou 5432 para PostgreSQL
-DB_DATABASE=capifit_db
-DB_USERNAME=capifit_user
-DB_PASSWORD=capifit_password
-```
+O servidor ficará disponível em `http://localhost:3001`. Verifique `http://localhost:3001/health` para confirmar o status. Logs detalhados são exibidos diretamente no terminal através do Pino.
 
-#### 3. Criar Models e Migrations
+### 5.2 Testes e lint
+
 ```bash
-php artisan make:model User -m
-php artisan make:model Client -m
-php artisan make:model Exercise -m
-# ... outros models
+npm run test --workspace apps/api   # Vitest + Supertest
+npm run lint --workspace apps/api   # ESLint (erro se houver warnings)
 ```
 
-### Opção 3: Python + FastAPI
+### 5.3 Build de produção
 
-#### 1. Instalação
 ```bash
-pip install fastapi uvicorn sqlalchemy psycopg2-binary # PostgreSQL
-# OU
-pip install fastapi uvicorn sqlalchemy PyMySQL # MySQL
-pip install python-jose[cryptography] passlib[bcrypt]
+npm run build --workspace apps/api
 ```
 
-#### 2. Estrutura Base
-```python
-from fastapi import FastAPI, Depends, HTTPException
-from sqlalchemy import create_engine, Column, String, Integer
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
+O comando utiliza `tsup` para gerar os arquivos ESM em `apps/api/dist`. Rode `node dist/server.js` (ou use PM2) apontando para o `.env` preparado anteriormente.
 
-# Database setup
-DATABASE_URL = "postgresql://user:password@localhost/capifit_db"
-# OU para MySQL:
-# DATABASE_URL = "mysql+pymysql://user:password@localhost/capifit_db"
+---
 
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
+## 6. Troubleshooting rápido
 
-app = FastAPI(title="CapiFit API")
+| Sintoma | Como resolver |
+|---------|---------------|
+| `error TS2322` ao compilar | Execute `npm run generate --workspace apps/api` para garantir que o Prisma Client mais recente foi gerado e as tipagens estão sincronizadas. |
+| `PrismaClientInitializationError` | Verifique se `DATABASE_URL` está correto e se o banco está acessível. Rodar `npm run migrate --workspace apps/api` ajuda a validar a conexão. |
+| Falha ao instalar dependências (`ETIMEDOUT`, `EAI_AGAIN`) | Configure um registry espelhado com `npm config set registry <url>` ou libere `https://registry.npmjs.org` no firewall/proxy. |
+| Erros ao enviar e-mail em desenvolvimento | Deixe `ENABLE_EMAIL_NOTIFICATIONS=false` ou configure credenciais válidas (`SMTP_HOST`, `SMTP_USER`, etc.). |
 
-# Models, routes, etc...
-```
+---
 
-## 🔧 Configuração do Banco de Dados
+## 7. Próximos passos
 
-### Para PostgreSQL:
+- Integre com o frontend executando `npm run dev --workspace apps/web` e configure `VITE_API_URL` apontando para `http://localhost:3001`.
+- Para produção, siga o guia `setup-capifit-production.md`, que cobre Docker Compose, PM2, Nginx e boas práticas de segurança.
 
-#### 1. Instalar PostgreSQL
-```bash
-# Ubuntu/Debian
-sudo apt update
-sudo apt install postgresql postgresql-contrib
-
-# Iniciar serviço
-sudo systemctl start postgresql
-sudo systemctl enable postgresql
-```
-
-#### 2. Configurar Usuário e Banco
-```bash
-sudo -u postgres psql
-
--- Criar usuário
-CREATE USER capifit_user WITH ENCRYPTED PASSWORD 'capifit_password';
-
--- Criar banco
-CREATE DATABASE capifit_db OWNER capifit_user;
-
--- Conceder privilégios
-GRANT ALL PRIVILEGES ON DATABASE capifit_db TO capifit_user;
-
--- Sair
-\q
-```
-
-#### 3. Executar Schema
-```bash
-psql -U capifit_user -d capifit_db -f sql/postgresql/01_create_database.sql
-psql -U capifit_user -d capifit_db -f sql/postgresql/02_create_tables.sql
-psql -U capifit_user -d capifit_db -f sql/postgresql/03_sample_data.sql
-```
-
-### Para MySQL/MariaDB:
-
-#### 1. Instalar MySQL/MariaDB
-```bash
-# Ubuntu/Debian
-sudo apt update
-sudo apt install mysql-server
-# OU para MariaDB
-sudo apt install mariadb-server
-
-# Configuração inicial
-sudo mysql_secure_installation
-```
-
-#### 2. Configurar Usuário e Banco
-```sql
-sudo mysql -u root -p
-
--- Criar usuário
-CREATE USER 'capifit_user'@'localhost' IDENTIFIED BY 'capifit_password';
-
--- Criar banco
-CREATE DATABASE capifit_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-
--- Conceder privilégios
-GRANT ALL PRIVILEGES ON capifit_db.* TO 'capifit_user'@'localhost';
-FLUSH PRIVILEGES;
-
--- Sair
-EXIT;
-```
-
-#### 3. Executar Schema
-```bash
-mysql -u capifit_user -p capifit_db < sql/mysql/01_create_database.sql
-mysql -u capifit_user -p capifit_db < sql/mysql/02_create_tables.sql
-mysql -u capifit_user -p capifit_db < sql/mysql/03_sample_data.sql
-```
-
-## 🔐 Implementação da Autenticação
-
-### Exemplo com Node.js/Express (routes/auth.js)
-```javascript
-const express = require('express');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const { User } = require('../models');
-
-const router = express.Router();
-
-// Register
-router.post('/signup', async (req, res) => {
-  try {
-    const { email, password, full_name, role } = req.body;
-    
-    // Check if user exists
-    const existingUser = await User.findOne({ where: { email } });
-    if (existingUser) {
-      return res.status(400).json({ message: 'User already exists' });
-    }
-    
-    // Hash password
-    const password_hash = await bcrypt.hash(password, 10);
-    
-    // Create user
-    const user = await User.create({
-      email,
-      password_hash,
-      full_name,
-      role: role || 'client'
-    });
-    
-    // Generate token
-    const token = jwt.sign(
-      { userId: user.id, email: user.email, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' }
-    );
-    
-    res.status(201).json({
-      user: {
-        id: user.id,
-        email: user.email,
-        full_name: user.full_name,
-        role: user.role
-      },
-      token
-    });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Login
-router.post('/signin', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    
-    // Find user
-    const user = await User.findOne({ where: { email } });
-    if (!user) {
-      return res.status(401).json({ message: 'Invalid credentials' });
-    }
-    
-    // Check password
-    const isPasswordValid = await bcrypt.compare(password, user.password_hash);
-    if (!isPasswordValid) {
-      return res.status(401).json({ message: 'Invalid credentials' });
-    }
-    
-    // Generate token
-    const token = jwt.sign(
-      { userId: user.id, email: user.email, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' }
-    );
-    
-    res.json({
-      user: {
-        id: user.id,
-        email: user.email,
-        full_name: user.full_name,
-        role: user.role
-      },
-      token
-    });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-module.exports = router;
-```
-
-## 📊 Exemplo de API Endpoints
-
-### Endpoints Principais
-```
-POST   /api/auth/signup          - Registrar usuário
-POST   /api/auth/signin          - Login
-POST   /api/auth/signout         - Logout
-GET    /api/auth/me              - Dados do usuário atual
-
-GET    /api/users                - Listar usuários
-PUT    /api/users/:id            - Atualizar usuário
-
-GET    /api/clients              - Listar clientes
-POST   /api/clients              - Criar cliente
-PUT    /api/clients/:id          - Atualizar cliente
-DELETE /api/clients/:id          - Deletar cliente
-
-GET    /api/exercises            - Listar exercícios
-POST   /api/exercises            - Criar exercício
-
-GET    /api/workouts             - Listar treinos
-POST   /api/workouts             - Criar treino
-
-GET    /api/notifications        - Listar notificações
-POST   /api/notifications        - Criar notificação
-
-POST   /api/files/upload         - Upload de arquivos
-```
-
-## 🚀 Deployment
-
-### 1. Configurar PM2 (Node.js)
-```bash
-npm install -g pm2
-pm2 start server.js --name capifit-api
-pm2 startup
-pm2 save
-```
-
-### 2. Nginx Reverse Proxy
-```nginx
-# /etc/nginx/sites-available/capifit-api
-server {
-    listen 80;
-    server_name api.capifit.com;
-    
-    location / {
-        proxy_pass http://localhost:3001;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-    }
-}
-```
-
-### 3. Variáveis de Ambiente Backend
-```env
-# Backend .env
-NODE_ENV=production
-PORT=3001
-JWT_SECRET=seu-jwt-secret-super-seguro
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=capifit_db
-DB_USER=capifit_user
-DB_PASSWORD=capifit_password
-```
-
-## ✅ Teste da API
-
-### 1. Teste com curl
-```bash
-# Registrar usuário
-curl -X POST http://localhost:3001/api/auth/signup \
-  -H "Content-Type: application/json" \
-  -d '{"email":"test@test.com","password":"123456","full_name":"Test User"}'
-
-# Login
-curl -X POST http://localhost:3001/api/auth/signin \
-  -H "Content-Type: application/json" \
-  -d '{"email":"test@test.com","password":"123456"}'
-```
-
-### 2. Teste com Postman
-Importe a collection de API endpoints e teste todas as funcionalidades.
-
-## 🔧 Próximos Passos
-
-1. **Escolher uma opção** de backend (Node.js recomendado)
-2. **Configurar o banco** (PostgreSQL recomendado)
-3. **Implementar a API** seguindo os exemplos
-4. **Testar todas as rotas** 
-5. **Fazer deploy** no seu VPS
-6. **Atualizar frontend** para usar nova API
-
-Com esta implementação, o CapiFit ficará 100% funcional com banco de dados local!
+Com esses passos, o backend estará pronto para atender as rotas REST da plataforma CapiFit com as tipagens e dependências corretas.

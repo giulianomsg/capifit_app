@@ -1,3 +1,4 @@
+import type { Express } from 'express';
 import bcrypt from 'bcryptjs';
 import createHttpError from 'http-errors';
 import { Prisma, UserStatus } from '@prisma/client';
@@ -12,6 +13,24 @@ interface AuthenticatedUser {
   roles: string[];
   email: string;
   name: string;
+}
+
+export interface CreateUserData {
+  name: string;
+  email: string;
+  password: string;
+  phone?: string;
+  status?: UserStatus;
+  roles: string[];
+}
+
+export interface UpdateUserData {
+  name?: string;
+  email?: string;
+  phone?: string;
+  status?: UserStatus;
+  roles?: string[];
+  password?: string;
 }
 
 type UserWithRelations = Prisma.UserGetPayload<{
@@ -142,14 +161,7 @@ export async function getCurrentUser(params: { user: AuthenticatedUser | undefin
 
 export async function createUserAccount(params: {
   user: AuthenticatedUser | undefined;
-  data: {
-    name: string;
-    email: string;
-    password: string;
-    phone?: string;
-    status?: UserStatus;
-    roles: string[];
-  };
+  data: CreateUserData;
 }) {
   ensureAdmin(params.user);
 
@@ -193,14 +205,7 @@ export async function createUserAccount(params: {
 export async function updateUserAccount(params: {
   user: AuthenticatedUser | undefined;
   userId: string;
-  data: {
-    name?: string;
-    email?: string;
-    phone?: string;
-    status?: UserStatus;
-    roles?: string[];
-    password?: string;
-  };
+  data: UpdateUserData;
 }) {
   ensureSelfOrAdmin(params.user, params.userId);
 

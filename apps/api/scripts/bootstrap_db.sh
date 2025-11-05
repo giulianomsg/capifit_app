@@ -87,11 +87,16 @@ SQL
 
 unset PGPASSWORD || true
 
-ENV_FILE="apps/api/.env"
-TEMPLATE_FILE="apps/api/.env.example"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKSPACE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+ENV_FILE="${WORKSPACE_DIR}/.env"
+TEMPLATE_FILE="${WORKSPACE_DIR}/.env.example"
+DISPLAY_ENV_FILE="apps/api/.env"
+DISPLAY_TEMPLATE_FILE="apps/api/.env.example"
 
 if [[ ! -f "${TEMPLATE_FILE}" ]]; then
-  echo "Template ${TEMPLATE_FILE} não encontrado." >&2
+  echo "Template ${DISPLAY_TEMPLATE_FILE} não encontrado." >&2
   exit 1
 fi
 
@@ -104,5 +109,5 @@ if [[ "${PGHOST}" != "localhost" || "${PGPORT}" != "5432" ]]; then
   sed -i "s#@localhost:5432/#@${PGHOST}:${PGPORT}/#g" "${ENV_FILE}"
 fi
 
-echo "Arquivo ${ENV_FILE} atualizado localmente. (NÃO será commitado)"
+echo "Arquivo ${DISPLAY_ENV_FILE} atualizado localmente. (NÃO será commitado)"
 echo "Provisionamento do banco concluído com sucesso."

@@ -91,7 +91,30 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-app.use('/api', router);
+const sortedBasePaths = [...env.API_BASE_PATHS].sort((a, b) => {
+  if (a === b) {
+    return 0;
+  }
+
+  if (a === '/api') {
+    return -1;
+  }
+  if (b === '/api') {
+    return 1;
+  }
+  if (a === '/') {
+    return 1;
+  }
+  if (b === '/') {
+    return -1;
+  }
+
+  return a.localeCompare(b);
+});
+
+sortedBasePaths.forEach((basePath) => {
+  app.use(basePath, router);
+});
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Rota não encontrada' });

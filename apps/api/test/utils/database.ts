@@ -8,25 +8,52 @@ import { connectionString, memDatabase } from './pg-mem';
 
 const SALT_ROUNDS = Number(process.env.PASSWORD_SALT_ROUNDS ?? '10');
 
-export async function applyMigrations() {
-  const migrationsDir = path.resolve(__dirname, '../../prisma/migrations');
-  const entries = await fs.readdir(migrationsDir, { withFileTypes: true });
-  const directories = entries
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .sort();
+let migrationsApplied = false;
+let migrationsPromise: Promise<void> | null = null;
 
-  for (const directory of directories) {
-    const filePath = path.join(migrationsDir, directory, 'migration.sql');
-    const rawSql = await fs.readFile(filePath, 'utf-8');
-    const sanitized = rawSql
-      .replace(/CREATE OR REPLACE FUNCTION[\s\S]+?LANGUAGE plpgsql;\s*/gi, '')
-      .replace(/CREATE TRIGGER[\s\S]+?EXECUTE FUNCTION[\s\S]+?;\s*/gi, '');
-    if (sanitized.trim().length === 0) {
-      continue;
-    }
-    memDatabase.public.none(sanitized);
+export async function applyMigrations() {
+  if (migrationsApplied) {
+    return;
   }
+
+  if (migrationsPromise) {
+    return migrationsPromise;
+  }
+
+  migrationsPromise = (async () => {
+    const migrationsDir = path.resolve(__dirname, '../../prisma/migrations');
+    const entries = await fs.readdir(migrationsDir, { withFileTypes: true });
+    const directories = entries
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort();
+
+    for (const directory of directories) {
+      const filePath = path.join(migrationsDir, directory, 'migration.sql');
+      const rawSql = await fs.readFile(filePath, 'utf-8');
+      const sanitized = rawSql
+        .replace(/CREATE OR REPLACE FUNCTION[\s\S]+?LANGUAGE plpgsql;\s*/gi, '')
+        .replace(/CREATE TRIGGER[\s\S]+?EXECUTE FUNCTION[\s\S]+?;\s*/gi, '')
+        .replace(/CREATE\s+INDEX\s+"([^"]+)"/gi, 'CREATE INDEX IF NOT EXISTS "$1"')
+        .replace(/CREATE\s+UNIQUE\s+INDEX\s+"([^"]+)"/gi, 'CREATE UNIQUE INDEX IF NOT EXISTS "$1"');
+      if (sanitized.trim().length === 0) {
+        continue;
+      }
+      memDatabase.public.none(sanitized);
+    }
+
+    migrationsApplied = true;
+  })();
+
+  try {
+    await migrationsPromise;
+  } finally {
+    if (!migrationsApplied) {
+      migrationsPromise = null;
+    }
+  }
+
+  return migrationsPromise;
 }
 
 export async function clearDatabase(prisma: PrismaClient) {

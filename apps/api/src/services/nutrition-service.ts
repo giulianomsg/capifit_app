@@ -1,3 +1,4 @@
+import type { Express } from 'express';
 import { randomUUID } from 'node:crypto';
 
 import createHttpError from 'http-errors';
@@ -7,6 +8,7 @@ import {
   NutritionPlanStatus,
   Prisma,
   TrainerClientStatus,
+  Food,
 } from '@prisma/client';
 
 import { prisma } from '@lib/prisma';
@@ -19,7 +21,7 @@ interface AuthenticatedUser {
   roles: string[];
 }
 
-interface NutritionPlanPayload {
+export interface NutritionPlanPayload {
   clientId: string;
   title: string;
   description?: string | null;
@@ -27,18 +29,18 @@ interface NutritionPlanPayload {
   macros?: { protein?: number; carbs?: number; fat?: number } | null;
   startDate?: Date | string | null;
   endDate?: Date | string | null;
-  meals: Array<{
+  meals: {
     name: string;
     scheduledAt?: string | Date | null;
     notes?: string | null;
-    items: Array<{
+    items: {
       foodId?: string | null;
       customName?: string | null;
       quantity?: number | null;
       unit?: string | null;
       macros?: { calories?: number; protein?: number; carbs?: number; fat?: number } | null;
-    }>;
-  }>;
+    }[];
+  }[];
 }
 
 function isAdmin(user: AuthenticatedUser | undefined) {
@@ -78,7 +80,7 @@ async function ensureClientAssignment(user: AuthenticatedUser | undefined, clien
 function emitNutritionEvent(
   event: 'plan-created' | 'plan-updated',
   payload: unknown,
-  recipients: Array<string | null | undefined>,
+  recipients: (string | null | undefined)[],
 ) {
   const uniqueRecipients = new Set<string>();
   for (const recipient of recipients) {
@@ -118,7 +120,7 @@ function resolveTrainerScope(user: AuthenticatedUser | undefined, trainerId?: st
   return undefined;
 }
 
-function buildFoodResponse(food: Prisma.FoodGetPayload<{}>) {
+function buildFoodResponse(food: Food) {
   return {
     id: food.id,
     name: food.name,
@@ -187,9 +189,11 @@ function computePlanCompliance(plan: MealWithItems) {
   return { compliance, totals };
 }
 
-function buildPlanSummary(plan: Prisma.NutritionPlanGetPayload<{
-  include: { client: true; meals: { include: { items: true } } };
-}>) {
+function buildPlanSummary(
+  plan: Prisma.NutritionPlanGetPayload<{
+    include: { client: true; meals: { include: { items: true } } };
+  }>,
+) {
   const { compliance, totals } = computePlanCompliance(plan);
   return {
     id: plan.id,
@@ -204,6 +208,19 @@ function buildPlanSummary(plan: Prisma.NutritionPlanGetPayload<{
     macros: plan.macros,
     totals,
   };
+}
+
+export interface CreateFoodData {
+  name: string;
+  category: string;
+  servingSize?: number;
+  calories: number;
+  protein?: number;
+  carbs?: number;
+  fat?: number;
+  fiber?: number;
+  sugar?: number;
+  sodium?: number;
 }
 
 export async function listFoods(params: {
@@ -231,18 +248,7 @@ export async function listFoods(params: {
 
 export async function createFood(params: {
   user: AuthenticatedUser | undefined;
-  data: {
-    name: string;
-    category: string;
-    servingSize?: number;
-    calories: number;
-    protein?: number;
-    carbs?: number;
-    fat?: number;
-    fiber?: number;
-    sugar?: number;
-    sodium?: number;
-  };
+  data: CreateFoodData;
 }) {
   ensureTrainerOrAdmin(params.user);
 
@@ -392,6 +398,7 @@ export async function getNutritionAnalytics(params: { user: AuthenticatedUser | 
   const weeklyProgress = Array.from({ length: 7 }).map((_, index) => ({
     day: index,
     adherence: Math.max(60, Math.min(100, Math.round(averageCompliance + Math.sin(index) * 5))),
+
   }));
 
   const macroSum = macroTotals.protein + macroTotals.carbs + macroTotals.fat || 1;
@@ -527,14 +534,18 @@ export async function saveNutritionAttachment(params: {
     data: { planId: plan.id, attachmentId: attachment.id },
   });
 
-  emitNutritionEvent('plan-updated', {
-    planId: plan.id,
-    attachment: {
-      id: attachment.id,
-      filename: attachment.filename,
-      uploadedAt: attachment.uploadedAt,
+  emitNutritionEvent(
+    'plan-updated',
+    {
+      planId: plan.id,
+      attachment: {
+        id: attachment.id,
+        filename: attachment.filename,
+        uploadedAt: attachment.uploadedAt,
+      },
     },
-  }, [plan.clientId, plan.trainerId]);
+    [plan.clientId, plan.trainerId],
+  );
 
   return {
     id: attachment.id,
