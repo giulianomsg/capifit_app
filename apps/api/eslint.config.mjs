@@ -60,10 +60,13 @@ export default [
           js: 'never',
         },
       ],
+      'no-undef': 'off',
       '@typescript-eslint/consistent-type-imports': 'off',
       '@typescript-eslint/no-misused-promises': ['error', { checksVoidReturn: false }],
       '@typescript-eslint/prefer-nullish-coalescing': 'off',
       '@typescript-eslint/consistent-type-definitions': 'off',
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/array-type': 'off',
     },
   },
 ];

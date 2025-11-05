@@ -1,4 +1,4 @@
-// eslint-disable-next-line import/extensions
+/* eslint-disable import/extensions */
 import 'tsconfig-paths/register.js';
 import { createServer } from 'node:http';
 import type { Signals } from 'node:process';

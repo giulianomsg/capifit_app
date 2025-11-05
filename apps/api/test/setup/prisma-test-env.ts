@@ -1,3 +1,5 @@
+import '../utils/pg-mem';
+import { configureTestDatabaseEnv, applyMigrations } from '../utils/database';
 import { PrismaClient } from '@prisma/client';
 
 declare global {
@@ -21,6 +23,8 @@ async function ensureMigrationsOnce(client: PrismaClient) {
   }
 }
 
+configureTestDatabaseEnv();
+
 if (!global.__TEST_PRISMA__) {
   global.__TEST_PRISMA__ = new PrismaClient();
 }
@@ -28,7 +32,12 @@ if (!global.__TEST_PRISMA__) {
 export const prisma = global.__TEST_PRISMA__;
 global.prisma = prisma;
 
-ensureMigrationsOnce(prisma!).catch((e) => {
-  // eslint-disable-next-line no-console
-  console.error('Failed to ensure test migrations', e);
-});
+void (async () => {
+  try {
+    await applyMigrations();
+    await ensureMigrationsOnce(prisma!);
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('Failed to initialize test database', error);
+  }
+})();
