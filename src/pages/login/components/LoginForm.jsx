@@ -98,7 +98,7 @@ const LoginForm = () => {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <div className="w-full max-w-md mx-auto">
       {/* General Error */}
       {errors?.general && (
         <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
@@ -155,25 +155,49 @@ const LoginForm = () => {
       >
         Entrar
       </Button>
-      {/* Demo Credentials Info */}
-      <div className="mt-6 p-4 bg-muted/50 rounded-lg">
-        <h4 className="text-sm font-semibold text-foreground mb-2 flex items-center">
-          <Icon name="Info" size={16} className="mr-2 text-primary" />
-          Credenciais de Demonstração - CapiFit
-        </h4>
-        <div className="space-y-2 text-xs text-muted-foreground">
-          <div>
-            <strong>Personal Trainer:</strong> joao.silva@capifit.com / trainer123
+      
+      {/* Demo Credentials Section */}
+      <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <h3 className="text-sm font-semibold text-blue-800 mb-3">
+          🎯 Credenciais de Demonstração
+        </h3>
+        <div className="space-y-2 text-xs text-blue-700">
+          <div className="flex justify-between items-center p-2 bg-white rounded border">
+            <div>
+              <div className="font-semibold">👑 Admin</div>
+              <div>admin@capifit.com</div>
+            </div>
+            <div className="text-right">
+              <div className="font-mono bg-blue-100 px-2 py-1 rounded">admin123</div>
+            </div>
           </div>
-          <div>
-            <strong>Cliente:</strong> maria.santos@gmail.com / client123
+          
+          <div className="flex justify-between items-center p-2 bg-white rounded border">
+            <div>
+              <div className="font-semibold">💪 Personal Trainer</div>
+              <div>trainer@capifit.com</div>
+            </div>
+            <div className="text-right">
+              <div className="font-mono bg-blue-100 px-2 py-1 rounded">trainer123</div>
+            </div>
           </div>
-          <div>
-            <strong>Administrador:</strong> admin@capifit.com / admin123
+          
+          <div className="flex justify-between items-center p-2 bg-white rounded border">
+            <div>
+              <div className="font-semibold">🏃‍♀️ Cliente</div>
+              <div>client@capifit.com</div>
+            </div>
+            <div className="text-right">
+              <div className="font-mono bg-blue-100 px-2 py-1 rounded">client123</div>
+            </div>
           </div>
         </div>
+        
+        <p className="text-xs text-blue-600 mt-3 text-center">
+          Clique em qualquer credencial para copiar
+        </p>
       </div>
-    </form>
+    </div>
   );
 };
 

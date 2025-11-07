@@ -17,6 +17,9 @@ const limiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Import email routes
+const emailRoutes = require('./routes/email')
+
 // Middleware
 app?.use(cors({
   origin: process.env?.FRONTEND_URL || 'http://localhost:3000',
@@ -105,6 +108,9 @@ app?.get('/api/test-db', async (req, res) => {
     });
   }
 });
+
+// Email routes
+app?.use('/api/email', emailRoutes)
 
 // API routes will be added here
 app?.use('/api/auth', require('./routes/auth'));
